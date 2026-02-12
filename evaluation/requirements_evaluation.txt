@@ -1,0 +1,14 @@
+# Evaluation Framework Dependencies
+# Install with: pip install -r requirements_evaluation.txt
+
+# Core dependencies
+opik>=0.1.0
+aisuite>=0.1.0
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Already installed in main project
+# flask
+# flask-socketio
+# pymongo
