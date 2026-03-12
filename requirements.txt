@@ -8,6 +8,8 @@ python-engineio==4.9.0
 requests==2.31.0
 eventlet==0.35.1
 python-dotenv==1.0.0
+opik==1.1.0
+pandas==2.2.0
 
 # Optional: untuk production deployment
 gunicorn==21.2.0

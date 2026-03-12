@@ -8,12 +8,25 @@ import json
 from collections import Counter
 import numpy as np
 
+try:
+    from insights.report_crew import get_report_crew
+    CREW_AVAILABLE = True
+except:
+    CREW_AVAILABLE = False
+    print("[REPORT] CrewAI not available, using Lite Agentic Narrative")
+
+try:
+    from insights.lite_report_agent import generate_lite_narrative
+    LITE_AVAILABLE = True
+except ImportError:
+    LITE_AVAILABLE = False
+
 
 class ReportGenerator:
     """Generate comprehensive health reports for patients"""
     
     @staticmethod
-    def generate_report(patient_state, alerts, agent_logs, time_range_hours=24):
+    def generate_report(patient_state, alerts, agent_logs, time_range_hours=24, graph_memory_summary="", ai_narrative="", extra_data=None, model_caller=None):
         """
         Generate comprehensive health report
         
@@ -43,6 +56,14 @@ class ReportGenerator:
                     except:
                         recent_data.append(d)  # Include if can't parse timestamp
         
+        # Combine with extra data mapped from historical source if provided
+        if extra_data:
+            for ed in extra_data:
+                # Add if not already in recent_data (very crude deduplication based on timestamps)
+                ts = ed.get('timestamp')
+                if ts and not any(r.get('timestamp') == ts for r in recent_data):
+                    recent_data.append(ed)
+        
         recent_alerts = []
         for a in alerts:
             try:
@@ -61,7 +82,6 @@ class ReportGenerator:
             except:
                 pass
         
-        # Generate report sections
         report = {
             'metadata': ReportGenerator._generate_metadata(
                 patient_state.device_id, 
@@ -76,8 +96,60 @@ class ReportGenerator:
                 'current_risk_score': patient_state.risk_score,
                 'risk_level': ReportGenerator._get_risk_level(patient_state.risk_score)
             },
-            'raw_data_sample': recent_data[:50] if recent_data else []  # Last 50 readings for reference
+            'graph_memory_summary': graph_memory_summary,
+            'ai_narrative': ai_narrative,
+            'data': recent_data if recent_data else []  # Provide raw records for Daily Data UI
         }
+        
+        # ========== GENERATE AI NARRATIVE ==========
+        if not ai_narrative:
+            # 1. Try Lite Agentic Narrative first (Reliable on Python 3.14, no extra deps)
+            if LITE_AVAILABLE and model_caller:
+                try:
+                    print(f"[REPORT] Generating Lite Agentic Narrative for {patient_state.device_id}")
+                    ai_narrative = generate_lite_narrative(
+                        patient_id=patient_state.device_id,
+                        vital_signs=report['vital_signs'],
+                        activities=report['activity_summary'],
+                        locations=report['location_analysis'],
+                        alerts=report['alerts_summary'],
+                        risk_score=patient_state.risk_score,
+                        graphiti_summary=graph_memory_summary,
+                        time_range_hours=time_range_hours,
+                        model_caller=model_caller
+                    )
+                    print(f"[REPORT] AI narrative generated via Lite Agent")
+                except Exception as e:
+                    print(f"[REPORT] Lite Agent failed: {e}")
+
+            # 2. Try CrewAI as secondary (often fails on 3.14 due to dependency issues)
+            if not ai_narrative and CREW_AVAILABLE:
+                try:
+                    print(f"[REPORT] Generating AI narrative with CrewAI for {patient_state.device_id}")
+                    crew = get_report_crew()
+                    ai_narrative = crew.generate_narrative(
+                        patient_id=patient_state.device_id,
+                        vital_signs=report['vital_signs'],
+                        activities=report['activity_summary'],
+                        locations=report['location_analysis'],
+                        alerts=report['alerts_summary'],
+                        risk_score=patient_state.risk_score,
+                        graphiti_summary=graph_memory_summary,
+                        time_range_hours=time_range_hours
+                    )
+                    # Check if it returned the generic fallback starting with '## Executive Summary'
+                    if ai_narrative and ai_narrative.strip().startswith('## Executive Summary'):
+                        print(f"[REPORT] CrewAI returned generic fallback, might need better model")
+                except Exception as e:
+                    print(f"[REPORT] CrewAI failed: {e}")
+
+            # 3. Final safety fallback
+            if not ai_narrative:
+                ai_narrative = f"### Summary for Patient {patient_state.device_id}\n\nThe patient is currently at a risk score of {patient_state.risk_score}. "
+                if graph_memory_summary:
+                    ai_narrative += f"\n\n**Insights:**\n{graph_memory_summary}"
+        
+        report['ai_narrative'] = ai_narrative
         
         return report
     
@@ -152,10 +224,17 @@ class ReportGenerator:
                 'most_common_activity': 'No data'
             }
         
-        postures = [
-            POSTURE_MAP.get(int(d.get('Posture_state', 0)), 'Unknown') 
-            for d in data
-        ]
+        postures = []
+        for d in data:
+            val = d.get('Posture_state', 0)
+            if isinstance(val, str) and not val.isdigit():
+                postures.append(val)
+            else:
+                try:
+                    p = POSTURE_MAP.get(int(val), 'Unknown')
+                    postures.append(p)
+                except ValueError:
+                    postures.append('Unknown')
         
         distribution = Counter(postures)
         total = len(postures)
@@ -191,10 +270,16 @@ class ReportGenerator:
                 'most_visited': 'No data'
             }
         
-        areas = [
-            AREA_MAP.get(int(d.get('Area', d.get('Lokasi', 0))), 'Unknown')
-            for d in data
-        ]
+        areas = []
+        for d in data:
+            val = d.get('Area', d.get('Lokasi', 0))
+            if isinstance(val, str) and not val.isdigit():
+                areas.append(val)
+            else:
+                try:
+                    areas.append(AREA_MAP.get(int(val), 'Unknown'))
+                except ValueError:
+                    areas.append('Unknown')
         
         distribution = Counter(areas)
         
@@ -249,6 +334,8 @@ class ReportGenerator:
         alerts = report_data['alerts_summary']
         risk = report_data['risk_assessment']
         agent_activity = report_data['agent_activity']
+        graph_mem = report_data.get('graph_memory_summary', '')
+        ai_nar = report_data.get('ai_narrative', '')
         
         # Format timestamps
         try:
@@ -269,43 +356,46 @@ class ReportGenerator:
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: #0f172a; /* Slate 900 */
+            color: #cbd5e1; /* Slate 300 */
             padding: 20px;
         }}
         .container {{ 
             max-width: 1000px; 
             margin: 0 auto; 
-            background: white; 
+            background: #1e293b; /* Slate 800 */
             border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             overflow: hidden;
+            border: 1px solid #334155;
         }}
         .header {{ 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: #f8fafc;
             padding: 40px;
             text-align: center;
+            border-bottom: 2px solid #00ffcc;
         }}
-        .header h1 {{ font-size: 2.5em; margin-bottom: 10px; }}
-        .header .device-id {{ font-size: 1.2em; opacity: 0.9; }}
+        .header h1 {{ font-size: 2.5em; margin-bottom: 10px; color: #00ffcc; }}
+        .header .device-id {{ font-size: 1.2em; opacity: 0.9; font-family: monospace; }}
         .content {{ padding: 40px; }}
         
         .metadata {{ 
-            background: #f8f9fa;
-            border-left: 4px solid #667eea;
+            background: #0f172a;
+            border-left: 4px solid #00ffcc;
             padding: 20px;
             margin-bottom: 30px;
             border-radius: 8px;
         }}
         .metadata-item {{ margin: 8px 0; }}
-        .metadata-label {{ font-weight: 600; color: #495057; }}
+        .metadata-label {{ font-weight: 600; color: #94a3b8; }}
         
         h2 {{ 
-            color: #667eea;
+            color: #00ffcc;
             margin: 30px 0 20px 0;
             padding-bottom: 10px;
-            border-bottom: 2px solid #e9ecef;
+            border-bottom: 1px solid #334155;
         }}
         
         .risk-banner {{
@@ -316,9 +406,9 @@ class ReportGenerator:
             font-size: 2em;
             font-weight: bold;
         }}
-        .risk-HIGH {{ background: #fee2e2; color: #dc2626; border: 3px solid #dc2626; }}
-        .risk-MEDIUM {{ background: #fef3c7; color: #f59e0b; border: 3px solid #f59e0b; }}
-        .risk-LOW {{ background: #d1fae5; color: #16a34a; border: 3px solid #16a34a; }}
+        .risk-HIGH {{ background: rgba(220, 38, 38, 0.2); color: #ef4444; border: 2px solid #ef4444; }}
+        .risk-MEDIUM {{ background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 2px solid #f59e0b; }}
+        .risk-LOW {{ background: rgba(16, 185, 129, 0.2); color: #10b981; border: 2px solid #10b981; }}
         
         .stat-grid {{ 
             display: grid; 
@@ -327,15 +417,16 @@ class ReportGenerator:
             margin: 20px 0; 
         }}
         .stat-card {{ 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #0f172a;
+            color: #f8fafc;
             padding: 25px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
         }}
         .stat-label {{ 
             font-size: 0.9em; 
-            opacity: 0.9;
+            color: #00ffcc;
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-bottom: 10px;
@@ -347,7 +438,7 @@ class ReportGenerator:
         }}
         .stat-detail {{ 
             font-size: 0.9em; 
-            opacity: 0.85;
+            color: #94a3b8;
             margin-top: 10px;
         }}
         
@@ -355,57 +446,62 @@ class ReportGenerator:
             width: 100%; 
             border-collapse: collapse; 
             margin: 20px 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: #0f172a;
             border-radius: 8px;
             overflow: hidden;
+            border: 1px solid #334155;
         }}
-        thead {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }}
+        thead {{ background: #00ffcc; color: #0f172a; }}
         th, td {{ 
             text-align: left; 
             padding: 15px;
         }}
-        th {{ font-weight: 600; text-transform: uppercase; font-size: 0.9em; letter-spacing: 0.5px; }}
-        tbody tr {{ border-bottom: 1px solid #e9ecef; }}
-        tbody tr:hover {{ background: #f8f9fa; }}
+        th {{ font-weight: 700; text-transform: uppercase; font-size: 0.9em; letter-spacing: 0.5px; }}
+        tbody tr {{ border-bottom: 1px solid #334155; }}
+        tbody tr:hover {{ background: #1e293b; }}
         
         .alert-item {{ 
             padding: 15px;
             margin: 10px 0;
             border-radius: 8px;
             border-left: 4px solid;
+            background: #0f172a;
         }}
-        .alert-CRITICAL {{ 
-            background: #fee2e2; 
-            border-color: #dc2626;
-        }}
-        .alert-WARNING {{ 
-            background: #fef3c7; 
-            border-color: #f59e0b;
-        }}
+        .alert-CRITICAL {{ border-color: #ef4444; color: #fca5a5; }}
+        .alert-WARNING {{ border-color: #f59e0b; color: #fde68a; }}
         .alert-timestamp {{ 
             font-weight: 600;
             margin-bottom: 5px;
         }}
         
         .footer {{ 
-            background: #f8f9fa;
+            background: #0f172a;
             padding: 30px;
             text-align: center;
-            color: #6c757d;
+            color: #94a3b8;
             font-size: 0.9em;
-            border-top: 1px solid #e9ecef;
+            border-top: 1px solid #334155;
         }}
         
         .no-data {{ 
             text-align: center;
             padding: 40px;
-            color: #6c757d;
+            color: #64748b;
             font-style: italic;
+            background: #0f172a;
+            border-radius: 8px;
         }}
         
         @media print {{
-            body {{ background: white; padding: 0; }}
-            .container {{ box-shadow: none; }}
+            body {{ background: white; color: black; padding: 0; }}
+            .container {{ box-shadow: none; border: none; }}
+            table, .metadata, .stat-card, .footer {{
+                background: white !important;
+                color: black !important;
+                border: 1px solid #ccc !important;
+            }}
+            thead {{ background: #eee !important; color: black !important; }}
+            h2, .stat-label {{ color: black !important; }}
         }}
     </style>
 </head>
@@ -437,7 +533,40 @@ class ReportGenerator:
                 Risk Level: {risk['risk_level']} ({risk['current_risk_score']:.2f})
             </div>
 """
-        
+        if ai_nar:
+            try:
+                import markdown
+                # Convert markdown narrative to HTML with extensions
+                nar_html = markdown.markdown(
+                    ai_nar,
+                    extensions=['extra', 'nl2br', 'sane_lists']
+                )
+                html += f"""
+            <h2>🤖 Expert AI Analysis</h2>
+            <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 30px; line-height: 1.8; color: #f8fafc;">
+                {nar_html}
+            </div>
+"""
+            except:
+                # Fallback: render with real newlines as <br>
+                formatted_nar = "<br>".join(ai_nar.split("\n"))
+                html += f"""
+            <h2>🤖 Expert AI Analysis</h2>
+            <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 30px; line-height: 1.8; color: #f8fafc;">
+                {formatted_nar}
+            </div>
+"""
+
+        if graph_mem:
+            # Format graph mem text as HTML paragraphs
+            formatted_mem = "<br>".join(graph_mem.split("\\n"))
+            html += f"""
+            <h2>💾 Semantic Memory Records (Graphiti)</h2>
+            <div style="background: rgba(139, 92, 246, 0.1); border-left: 4px solid #8b5cf6; padding: 20px; border-radius: 8px; margin-bottom: 30px; line-height: 1.6; color: #f8fafc;">
+                {formatted_mem}
+            </div>
+"""
+
         # Vital Signs
         html += """
             <h2> Vital Signs Summary</h2>
