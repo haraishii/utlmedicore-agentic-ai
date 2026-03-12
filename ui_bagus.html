@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://code.iconify.design/iconify-icon/3.0.0/iconify-icon.min.js"></script>
+    <style type="text/tailwindcss">
+
+        @theme inline {
+        --color-background: var(--background);
+        --color-foreground: var(--foreground);
+        --color-primary: var(--primary);
+        --color-primary-foreground: var(--primary-foreground);
+        --color-secondary: var(--secondary);
+        --color-secondary-foreground: var(--secondary-foreground);
+        --color-muted: var(--muted);
+        --color-muted-foreground: var(--muted-foreground);
+        --color-accent: var(--accent);
+        --color-accent-foreground: var(--accent-foreground);
+        --color-destructive: var(--destructive);
+        --color-card: var(--card);
+        --color-card-foreground: var(--card-foreground);
+        --color-popover: var(--popover);
+        --color-popover-foreground: var(--popover-foreground);
+        --color-border: var(--border);
+        --color-input: var(--input);
+        --color-ring: var(--ring);
+        --color-chart-1: var(--chart-1);
+        --color-chart-2: var(--chart-2);
+        --color-chart-3: var(--chart-3);
+        --color-chart-4: var(--chart-4);
+        --color-chart-5: var(--chart-5);
+
+        --font-font-sans: var(--font-sans);
+        --font-font-heading: var(--font-heading);
+        --font-font-serif: var(--font-serif);
+        --font-font-mono: var(--font-mono);
+
+        --radius-sm: calc(var(--radius) - 4px);
+        --radius-md: calc(var(--radius) - 2px);
+        --radius-lg: var(--radius);
+        --radius-xl: calc(var(--radius) + 4px);
+      }
+
+      :root {
+          --background: #12141D;
+        --foreground: #F4F5F7;
+        --primary: #00E5B5;
+        --primary-foreground: #12141D;
+        --secondary: #FF7E67;
+        --secondary-foreground: #12141D;
+        --muted: #2A2F3D;
+        --muted-foreground: #8E95A5;
+        --accent: #A78BFA;
+        --accent-foreground: #12141D;
+        --destructive: #FF5E5E;
+        --card: #1A1D27;
+        --card-foreground: #F4F5F7;
+        --popover: #1A1D27;
+        --popover-foreground: #F4F5F7;
+        --border: #33394A;
+        --input: #1A1D27;
+        --ring: #00E5B5;
+        --chart-1: #00E5B5;
+        --chart-2: #FF7E67;
+        --chart-3: #A78BFA;
+        --chart-4: #FCD34D;
+        --chart-5: #60A5FA;
+
+        --font-sans: "Geist";
+        --font-heading: "Space Grotesk";
+        --font-serif: "Playfair Display";
+        --font-mono: "JetBrains Mono";
+
+        --radius: 1rem;
+      }
+    </style>
+</head>
+
+<body>
+    <div class="min-h-screen bg-background text-foreground flex flex-col font-sans pb-24 selection:bg-primary/20">
+        <header class="px-6 pt-12 pb-6 flex items-start justify-between">
+            <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-3">
+                    <img src="https://lh3.googleusercontent.com/a/ACg8ocILRXws4m_Ja3dWh5U1xsWtuAOOm4hRM5En2ROahtEMRhaUUg=s96-c"
+                        alt="User Profile" class="w-10 h-10 rounded-full border border-border" />
+                    <div>
+                        <h1 class="font-heading font-bold text-lg tracking-wide uppercase text-foreground">
+                            Tokikaze Hayasei
+                        </h1>
+                        <p class="text-xs font-mono text-muted-foreground uppercase tracking-widest">
+                            Sys-Sync: Active
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div
+                class="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-card/50 shadow-[2px_2px_0px_0px_rgba(51,57,74,1)]">
+                <span class="w-2 h-2 rounded-full bg-chart-1 animate-pulse"></span><span
+                    class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">Online</span>
+            </div>
+        </header>
+        <main class="flex-1 px-6 flex flex-col gap-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div
+                    class="col-span-2 bg-card rounded-2xl p-5 border border-border shadow-[4px_4px_0px_0px_rgba(51,57,74,1)] flex flex-col justify-between relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-6 z-10">
+                        <div>
+                            <h2
+                                class="font-heading font-bold text-sm tracking-wider uppercase text-muted-foreground mb-1">
+                                Daily Activity
+                            </h2>
+                            <div class="flex items-end gap-2">
+                                <span
+                                    class="font-heading text-4xl font-bold tracking-tight text-foreground">6,862</span><span
+                                    class="text-xs font-bold text-chart-1 uppercase tracking-wider mb-1">Steps</span>
+                            </div>
+                        </div>
+                        <div class="bg-chart-1/10 p-2 rounded-xl text-chart-1">
+                            <iconify-icon icon="solar:running-bold" class="size-6"></iconify-icon>
+                        </div>
+                    </div>
+                    <div class="flex justify-around items-center z-10 pt-2 border-t border-border/50">
+                        <div class="flex flex-col items-center gap-2">
+                            <div
+                                class="relative flex items-center justify-center w-16 h-16 rounded-full border-4 border-muted">
+                                <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                    <path class="text-chart-1" stroke-dasharray="70, 100"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        fill="none" stroke="currentColor" stroke-width="4" />
+                                </svg><span class="font-heading text-sm font-bold text-foreground">70%</span>
+                            </div>
+                            <span
+                                class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Move</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <div
+                                class="relative flex items-center justify-center w-16 h-16 rounded-full border-4 border-muted">
+                                <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                    <path class="text-chart-2" stroke-dasharray="45, 100"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        fill="none" stroke="currentColor" stroke-width="4" />
+                                </svg><span class="font-heading text-sm font-bold text-foreground">45%</span>
+                            </div>
+                            <span
+                                class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Stand</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <div
+                                class="relative flex items-center justify-center w-16 h-16 rounded-full border-4 border-muted">
+                                <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                    <path class="text-chart-3" stroke-dasharray="85, 100"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        fill="none" stroke="currentColor" stroke-width="4" />
+                                </svg><span class="font-heading text-sm font-bold text-foreground">85%</span>
+                            </div>
+                            <span
+                                class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Train</span>
+                        </div>
+                    </div>
+                </div>
+                <div
+                    class="col-span-2 bg-card rounded-2xl p-5 border border-border shadow-[4px_4px_0px_0px_rgba(51,57,74,1)]">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h2
+                                class="font-heading font-bold text-xs tracking-wider uppercase text-muted-foreground mb-1">
+                                Heart Rate
+                            </h2>
+                            <div class="flex items-baseline gap-1">
+                                <span class="font-heading text-3xl font-bold text-chart-2">70</span><span
+                                    class="text-xs font-bold text-muted-foreground uppercase">BPM</span>
+                            </div>
+                        </div>
+                        <iconify-icon icon="solar:heart-pulse-bold" class="size-6 text-chart-2"></iconify-icon>
+                    </div>
+                    <div class="h-16 flex items-end gap-1">
+                        <div class="flex-1 bg-chart-2/20 h-[40%] rounded-t-sm"></div>
+                        <div class="flex-1 bg-chart-2/20 h-[50%] rounded-t-sm"></div>
+                        <div class="flex-1 bg-chart-2/40 h-[45%] rounded-t-sm"></div>
+                        <div class="flex-1 bg-chart-2/60 h-[70%] rounded-t-sm"></div>
+                        <div class="flex-1 bg-chart-2 h-[90%] rounded-t-sm"></div>
+                        <div class="flex-1 bg-chart-2/80 h-[60%] rounded-t-sm"></div>
+                        <div class="flex-1 bg-chart-2/40 h-[50%] rounded-t-sm"></div>
+                        <div class="flex-1 bg-chart-2/20 h-[45%] rounded-t-sm"></div>
+                    </div>
+                </div>
+                <div
+                    class="bg-card rounded-2xl p-4 border border-border shadow-[3px_3px_0px_0px_rgba(51,57,74,1)] flex flex-col justify-between min-h-[140px]">
+                    <div class="flex justify-between items-start">
+                        <div class="bg-chart-3/10 p-2 rounded-lg text-chart-3">
+                            <iconify-icon icon="solar:moon-sleep-bold" class="size-5"></iconify-icon>
+                        </div>
+                    </div>
+                    <div>
+                        <h2
+                            class="font-heading font-bold text-[10px] tracking-wider uppercase text-muted-foreground mb-1">
+                            Sleep Score
+                        </h2>
+                        <div class="font-heading text-2xl font-bold text-foreground">
+                            84<span class="text-sm text-muted-foreground">/100</span>
+                        </div>
+                        <p class="text-xs text-chart-3 font-semibold mt-1">Excellent Recovery</p>
+                    </div>
+                </div>
+                <div
+                    class="bg-card rounded-2xl p-4 border border-border shadow-[3px_3px_0px_0px_rgba(51,57,74,1)] flex flex-col justify-between min-h-[140px] relative overflow-hidden">
+                    <div class="flex justify-between items-start z-10">
+                        <div class="bg-chart-5/10 p-2 rounded-lg text-chart-5">
+                            <iconify-icon icon="solar:waterdrop-bold" class="size-5"></iconify-icon>
+                        </div>
+                    </div>
+                    <div class="z-10">
+                        <h2
+                            class="font-heading font-bold text-[10px] tracking-wider uppercase text-muted-foreground mb-1">
+                            Hydration
+                        </h2>
+                        <div class="font-heading text-2xl font-bold text-foreground">
+                            2.4<span class="text-sm text-muted-foreground">L</span>
+                        </div>
+                        <p class="text-xs text-muted-foreground font-semibold mt-1">Goal: 3.0L</p>
+                    </div>
+                    <div class="absolute bottom-0 left-0 right-0 h-[60%] bg-chart-5/10 border-t border-chart-5/20 z-0">
+                    </div>
+                </div>
+                <div
+                    class="col-span-2 bg-card rounded-2xl p-5 border border-border shadow-[4px_4px_0px_0px_rgba(51,57,74,1)] flex items-center justify-between">
+                    <div>
+                        <h2 class="font-heading font-bold text-xs tracking-wider uppercase text-muted-foreground mb-1">
+                            Calories
+                        </h2>
+                        <div class="flex items-baseline gap-2">
+                            <span class="font-heading text-2xl font-bold text-chart-4">1,840</span><span
+                                class="text-xs font-bold text-muted-foreground uppercase">Kcal Intaken</span>
+                        </div>
+                    </div>
+                    <div class="h-10 w-[2px] bg-border rounded-full"></div>
+                    <div class="text-right">
+                        <h2 class="font-heading font-bold text-xs tracking-wider uppercase text-muted-foreground mb-1">
+                            Burned
+                        </h2>
+                        <div class="flex items-baseline justify-end gap-2">
+                            <span class="font-heading text-2xl font-bold text-chart-2">2,100</span><span
+                                class="text-xs font-bold text-muted-foreground uppercase">Kcal</span>
+                        </div>
+                    </div>
+                </div>
+                <div
+                    class="col-span-2 bg-gradient-to-r from-chart-3/20 to-card rounded-2xl p-5 border border-chart-3/30 shadow-[4px_4px_0px_0px_rgba(167,139,250,0.3)] flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="relative flex items-center justify-center w-12 h-12">
+                            <iconify-icon icon="solar:battery-charge-bold"
+                                class="size-8 text-chart-3 absolute z-10"></iconify-icon>
+                            <div class="absolute inset-0 bg-chart-3/20 rounded-full animate-ping"></div>
+                        </div>
+                        <div>
+                            <h2 class="font-heading font-bold text-xs tracking-wider uppercase text-chart-3 mb-1">
+                                Body Battery
+                            </h2>
+                            <div class="font-heading text-xl font-bold text-foreground">
+                                92% <span class="text-xs font-normal text-muted-foreground ml-1">Charged</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <nav
+            class="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-md border-t border-border px-6 py-4 flex items-center justify-between z-50">
+            <button class="flex flex-col items-center gap-1 text-chart-1">
+                <iconify-icon icon="solar:widget-5-bold" class="size-6"></iconify-icon><span
+                    class="text-[10px] font-bold tracking-widest uppercase">Dash</span></button><button
+                class="flex flex-col items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                <iconify-icon icon="solar:chart-square-linear" class="size-6"></iconify-icon><span
+                    class="text-[10px] font-bold tracking-widest uppercase">Data</span></button><button
+                class="flex flex-col items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                <iconify-icon icon="solar:chat-round-line-linear" class="size-6"></iconify-icon><span
+                    class="text-[10px] font-bold tracking-widest uppercase">AI Chat</span></button><button
+                class="flex flex-col items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                <iconify-icon icon="solar:settings-linear" class="size-6"></iconify-icon><span
+                    class="text-[10px] font-bold tracking-widest uppercase">Config</span>
+            </button>
+        </nav>
+    </div>
+</body>
+
+</html>
