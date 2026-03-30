@@ -1,13 +1,13 @@
-# ⏱️ SYSTEM UPDATE: Reporting & Timezone Sync
+# SYSTEM UPDATE: Reporting & Timezone Sync
 **Date:** March 26, 2026  
 **Version:** `v1.3.1-timezone-analytics`
 
-## 📋 Executive Summary
-Following the requirement to amplify **AI Contextual Awareness**, the system logic was upgraded to focus heavily on **Timezone Synchronization** and **Analytical Depth**. This patch ensures that manual logs are seamlessly correlated with sensor intelligence in the correct local timezone (`UTC+8`). Additionally, the aesthetic profile of the clinical reporting engine has been professionalized, strictly stripping non-clinical artifacts (such as emojis) from the final generated output.
+## Executive Summary
+Following the requirement to amplify **AI Contextual Awareness**, the system logic was upgraded to focus heavily on **Timezone Synchronization** and **Analytical Depth**. This patch ensures that manual logs are seamlessly correlated with sensor intelligence in the correct local timezone (`UTC+8`). Additionally, the aesthetic profile of the clinical reporting engine has been professionalized, strictly stripping non-clinical artifacts from the final generated output.
 
 ---
 
-## ⚙️ Technical Enhancements
+## Technical Enhancements
 
 ### 1. High-Precision Timezone Normalization (`utils/tz_utils.py`)
 Legacy Neo4j timestamps utilized 9-digit nanosecond precision (e.g., `.000000000+00:00`), ultimately causing Python's `datetime.fromisoformat()` to fail and unexpectedly defaulting report metrics to UTC.
@@ -19,11 +19,11 @@ Report generation transitioned to a multi-phase cognitive reasoning model to ent
 
 *   **Phase 0: Executive Overview** — Synthesizes raw sensor statistics and manual logs into a cohesive chronological narrative of the patient's day.
 *   **Phase 1: Correlation Analyst** — Investigates "The Why". The AI scans each logged meal specifically and checks for HR/SpO2 fluctuations within a 30-60 minute post-meal window. It aligns manual activity logs with sensor-detected postures.
-*   **Phase 2: Senior Clinical Writer** — Converts the analytical breakdown into an authoritative, human-readable clinical document. Strips all emojis and enforces standard pathological formatting.
+*   **Phase 2: Senior Clinical Writer** — Converts the analytical breakdown into an authoritative, human-readable clinical document. Strips informal language and enforces standard pathological formatting.
 
 ---
 
-## 🧠 AI Prompting Architecture
+## AI Prompting Architecture
 
 ### A. Manual Log Integration Prompt (Analyst Phase)
 ```markdown
@@ -42,7 +42,7 @@ Report generation transitioned to a multi-phase cognitive reasoning model to ent
 ```markdown
 REPORT REQUIREMENTS:
 - TONE: Professional, authoritative, like a Chief Medical Officer's report.
-- CRITICAL: NO EMOJIS. Use professional clinical typography.
+- CRITICAL: Use professional clinical typography.
 - CORRELATION: Mention patterns between meals, activities, and vital sign trends.
 - SPECIFICITY: Mention the EXACT meal/activity name and the EXACT time in UTC+8.
 - STRUCTURE: 5 Sections (Summary, Pathophysiology, Diet/Lifestyle, Risk/Anomaly, Recommendations).
@@ -50,7 +50,7 @@ REPORT REQUIREMENTS:
 
 ---
 
-## 🔄 Data Workflow & Synthesis
+## Data Workflow & Synthesis
 1. **User Action**: Patient logs *"Fried Chicken with Cabbage"* at `12:23 PM`.
 2. **Database Commit**: Safely stored as a `ManualContext` entity utilizing raw UTC bounds.
 3. **Normalization**: During report requests, `utc_to_utc8()` corrects nanosecond drift and aligns to +8 UTC.
@@ -59,19 +59,19 @@ REPORT REQUIREMENTS:
 
 ---
 
-## 📈 System Comparison
+## System Comparison
 
 | Metric | Legacy Architecture | Updated Architecture |
 | :--- | :--- | :--- |
 | **Time Formatting** | UTC (Unadjusted DB Raw) | **Synchronized UTC+8 (Local)** |
 | **Analysis Scope** | Generic, focused only on food | **Holistic (Diet, Sleep, Activity Cycles)** |
 | **Data Fidelity** | Prone to LLM hallucinations | **Empirically backed by exact names/times** |
-| **Typography** | Emoji-heavy (`📈⚠️🏥`) | **Professional Clinical Table & Text** |
+| **Typography** | Informal styling | **Professional Clinical Table & Text** |
 
 ---
 
-## 🔧 Maintenance Operations
+## Maintenance Operations
 *   **Environment Validation**: Ensure operations execute strictly via `aisuite-agent` (`E:\anaconda\envs\aisuite-agent`).
 *   **Timestamp Standardization**: Import `from utils.tz_utils import utc_to_utc8` across all new microservices to guarantee time fidelity.
 
-*Log maintained by UTLMediCore AI System — Antigravity Agent*
+*Log maintained by UTLMediCore AI System*

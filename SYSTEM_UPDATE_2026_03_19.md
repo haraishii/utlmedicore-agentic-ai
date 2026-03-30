@@ -1,4 +1,4 @@
-# 🏥 UTLMediCore System Update
+# UTLMediCore System Update
 **Date:** March 19, 2026 — 06:06 WIB (Taipei, UTC+8)  
 **Version:** `v1.2.0-cloud-integration`
 
@@ -6,12 +6,12 @@
 
 ---
 
-## ☁️ 1. Graphiti Cloud LLM Integration
+## 1. Graphiti Cloud LLM Integration
 
-### 🔴 The Challenge
+### The Challenge
 The local LLaMA 8B model used for Graphiti entity extraction was experiencing significant latency and had a constrained context window. This resulted in delayed updates (30–60 minutes late) to the Neo4j graph, rendering memory-based context unreliable for real-time clinical AI decisions.
 
-### 🟢 The Solution (`memory/graphiti_client.py`)
+### The Solution (`memory/graphiti_client.py`)
 **Architecture Upgrade — `OllamaCloudLLMClient` class:**
 - Developed a proper subclass of Graphiti's `LLMClient` ABC, fully implementing the `_generate_response()` abstract method.
 - Integrated the **native `ollama.Client`** Python library for reliable protocol communication.
@@ -31,11 +31,11 @@ GRAPHITI_LOCAL_MODEL = os.getenv("GRAPHITI_LLM_MODEL", "llama3.1:8b")
 **Model Performance Matrix:**
 | Model | Latency | Status / Remarks |
 |:---|:---|:---|
-| `mistral-large-3:675b` | Medium | ✅ Active — Optimal accuracy |
-| `kimi-k2-thinking` | Slower | ✅ Reliable — Extended 200k context |
-| `glm4.7:cloud` | Faster | ⚠️ Pending authorization |
+| `mistral-large-3:675b` | Medium | Active — Optimal accuracy |
+| `kimi-k2-thinking` | Slower | Reliable — Extended 200k context |
+| `glm4.7:cloud` | Faster | Pending authorization |
 
-### 🐛 Debugging Journey
+### Debugging Journey
 | Error Encountered | Root Cause | Resolution |
 |:---|:---|:---|
 | `NameError: _graphiti_instance` | Variable accidentally removed | Restored variable definition |
@@ -45,12 +45,12 @@ GRAPHITI_LOCAL_MODEL = os.getenv("GRAPHITI_LLM_MODEL", "llama3.1:8b")
 
 ---
 
-## 📊 2. Custom Time Range Reports
+## 2. Custom Time Range Reports
 
-### 🔴 The Challenge
+### The Challenge
 Report generation was constrained to fixed periods (daily, weekly, monthly). Users requested the ability to generate specific short-term targeted reports (e.g., last 3 hours).
 
-### 🟢 The Solution
+### The Solution
 **Backend Integration (`agentic_medicore_enhanced.py`):**
 - Extended the `/api/report/generate` endpoint to accept `period: "custom"` with a dynamic `hours` parameter (1–168 hours).
 - Reports are now automatically routed to a new `reports/custom/` directory.
@@ -62,9 +62,9 @@ Report generation was constrained to fixed periods (daily, weekly, monthly). Use
 
 ---
 
-## 🏗️ 3. Hybrid Graph Write Architecture
+## 3. Hybrid Graph Write Architecture
 
-### 💡 The Strategy
+### The Strategy
 To prevent the "frozen graph" effect caused by LLM processing delays (30–90 seconds per episode), we introduced a **Two-Layer Write Architecture**:
 
 1. **Direct Neo4j Write (Layer 1):** Instant (<1s) writes for structured sensor data (HR, SpO2, Posture). Bypasses LLM entirely.
@@ -74,4 +74,4 @@ To prevent the "frozen graph" effect caused by LLM processing delays (30–90 se
 - Created `memory/direct_neo4j_writer.py` for synchronous, low-latency Neo4j transactions.
 - Added strict 90-second episode timeouts to prevent async queue blocking.
 
-*Log maintained by UTLMediCore AI System — Antigravity Agent*
+*Log maintained by UTLMediCore AI System*
