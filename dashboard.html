@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;600;700;800&display=swap"
+        rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg: #0b0e12;
+            --surface: #111418;
+            --border: #1e2530;
+            --border2: #262d38;
+            --text: #c8d0dc;
+            --muted: #4a5568;
+            --accent: #00c2a8;
+            --accent2: #e8b84b;
+            --danger: #e05555;
+            --ax: #5b9cf6;
+            --ay: #00c2a8;
+            --az: #e8b84b;
+            --ch4: #b57bee;
+            --mag: #f0f4f8;
+        }
+
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        html {
+            scroll-behavior: smooth
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 48px 48px;
+            opacity: 0.35;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Header ── */
+        header {
+            position: relative;
+            z-index: 10;
+            border-bottom: 1px solid var(--border2);
+            padding: 0 32px;
+            display: flex;
+            align-items: stretch;
+            background: var(--surface);
+        }
+
+        .header-brand {
+            padding: 20px 0;
+            border-right: 1px solid var(--border2);
+            padding-right: 28px;
+            margin-right: 28px;
+        }
+
+        .brand-label {
+            font-family: 'Syne', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .brand-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            color: #f0f4f8;
+            letter-spacing: -0.01em;
+        }
+
+        .brand-title span {
+            color: var(--accent)
+        }
+
+        .header-meta {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+            flex: 1;
+            padding: 20px 0;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px
+        }
+
+        .meta-key {
+            font-size: 9px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .meta-val {
+            font-size: 12px;
+            color: var(--text);
+            font-weight: 500
+        }
+
+        .status-pill {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border: 1px solid #00c2a830;
+            background: #00c2a808;
+            border-radius: 2px;
+            font-size: 11px;
+            color: var(--accent);
+            letter-spacing: 0.08em;
+        }
+
+        .pulse {
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1)
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.7)
+            }
+        }
+
+        /* ── Layout ── */
+        .main {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 28px 32px;
+            display: grid;
+            gap: 16px;
+        }
+
+        /* ── Stat row ── */
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 1px;
+            border: 1px solid var(--border2);
+            background: var(--border2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .stat-cell {
+            background: var(--surface);
+            padding: 18px 20px;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .stat-cell::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--accent-line, transparent);
+            transition: opacity 0.3s;
+        }
+
+        .stat-cell:hover {
+            background: #141820
+        }
+
+        .stat-k {
+            font-size: 9px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .stat-v {
+            font-family: 'Syne', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: #f0f4f8;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .stat-sub {
+            font-size: 10px;
+            color: var(--muted)
+        }
+
+        /* ── Panels ── */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .panel-head {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .panel-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #f0f4f8;
+        }
+
+        .panel-body {
+            padding: 20px
+        }
+
+        .panel-badge {
+            font-size: 10px;
+            padding: 4px 10px;
+            border-radius: 2px;
+            letter-spacing: 0.05em;
+            font-weight: 500;
+        }
+
+        .legend-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap
+        }
+
+        .leg {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            color: var(--muted)
+        }
+
+        .leg-line {
+            width: 20px;
+            height: 2px;
+            border-radius: 1px
+        }
+
+        /* ── Grids ── */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px
+        }
+
+        .grid-main {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 16px
+        }
+
+        .grid-3col {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px
+        }
+
+        /* ── Chart wrap ── */
+        .chart-wrap {
+            position: relative
+        }
+
+        .chart-wrap::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0, 0, 0, 0.04) 3px, rgba(0, 0, 0, 0.04) 4px);
+            pointer-events: none;
+        }
+
+        canvas {
+            display: block
+        }
+
+        /* ── Activity indicator ── */
+        .activity-panel {
+            text-align: center;
+            padding: 32px 20px
+        }
+
+        .activity-label-sm {
+            font-size: 9px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        .activity-value {
+            font-family: 'Syne', sans-serif;
+            font-size: 36px;
+            font-weight: 800;
+            color: #f0f4f8;
+            line-height: 1;
+            margin-bottom: 6px;
+            transition: color 0.4s;
+        }
+
+        .activity-conf {
+            font-size: 11px;
+            color: var(--muted)
+        }
+
+        .activity-conf b {
+            color: var(--text);
+            font-weight: 500
+        }
+
+        /* ── Controls ── */
+        .ctrl-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .btn {
+            border: none;
+            padding: 7px 16px;
+            border-radius: 2px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            letter-spacing: 0.04em;
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: #000
+        }
+
+        .btn-accent:hover {
+            background: #00d4b8
+        }
+
+        .btn-warn {
+            background: var(--accent2);
+            color: #000
+        }
+
+        .btn-warn:hover {
+            background: #f0c45a
+        }
+
+        .btn-muted {
+            background: var(--border);
+            color: var(--muted);
+            border: 1px solid var(--border2)
+        }
+
+        .btn-muted:hover {
+            color: var(--text)
+        }
+
+        .speed-ctrl {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            color: var(--muted);
+            margin-left: auto
+        }
+
+        .speed-ctrl input {
+            width: 80px;
+            accent-color: var(--accent)
+        }
+
+        /* ── Insight list ── */
+        .insight-scroll {
+            max-height: 340px;
+            overflow-y: auto;
+            padding-right: 4px
+        }
+
+        .insight-entry {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .insight-entry:last-child {
+            border-bottom: none
+        }
+
+        .insight-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .insight-time {
+            font-size: 9px;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            font-weight: 500
+        }
+
+        .insight-tags {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap
+        }
+
+        .insight-tag {
+            font-size: 9px;
+            padding: 2px 8px;
+            background: var(--bg);
+            border: 1px solid var(--border2);
+            border-radius: 2px;
+            color: var(--muted);
+        }
+
+        .insight-text {
+            font-size: 11px;
+            line-height: 1.7;
+            color: var(--text)
+        }
+
+        .thinking-bar {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            font-size: 10px;
+            color: var(--accent);
+            letter-spacing: 0.05em;
+        }
+
+        .thinking-bar.show {
+            display: flex
+        }
+
+        .dots span {
+            animation: blink 1.4s infinite;
+            font-size: 14px
+        }
+
+        .dots span:nth-child(2) {
+            animation-delay: .2s
+        }
+
+        .dots span:nth-child(3) {
+            animation-delay: .4s
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: .2
+            }
+
+            50% {
+                opacity: 1
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        /* ── Alert list ── */
+        .alert-scroll {
+            max-height: 160px;
+            overflow-y: auto
+        }
+
+        .alert-entry {
+            padding: 10px 20px;
+            border-bottom: 1px solid #2a1520;
+            font-size: 11px;
+            color: var(--danger);
+            animation: fadeIn 0.3s;
+        }
+
+        .alert-time {
+            font-size: 9px;
+            color: #6a3040;
+            margin-bottom: 2px
+        }
+
+        .no-data {
+            color: #2a3040;
+            font-size: 11px;
+            text-align: center;
+            padding: 24px 0
+        }
+
+        /* ── Status msg ── */
+        .status-text {
+            font-size: 10px;
+            padding: 3px 10px;
+            border: 1px solid var(--border2);
+            border-radius: 2px;
+            color: var(--muted);
+            background: var(--bg);
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar {
+            width: 4px
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg)
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border2)
+        }
+
+        /* ── Responsive ── */
+        @media(max-width:900px) {
+            .stat-row {
+                grid-template-columns: repeat(3, 1fr)
+            }
+
+            .grid-2,
+            .grid-main,
+            .grid-3col {
+                grid-template-columns: 1fr
+            }
+
+            header {
+                flex-direction: column;
+                padding: 16px
+            }
+
+            .header-meta {
+                flex-wrap: wrap;
+                gap: 16px
+            }
+
+            .status-pill {
+                margin-left: 0
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-brand">
+            <div class="brand-label">Real-time Monitor</div>
+            <div class="brand-title">IMU <span>Agent</span></div>
+        </div>
+        <div class="header-meta">
+            <div class="meta-item">
+                <span class="meta-key">Model</span>
+                <span class="meta-val">Random Forest</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-key">LLM</span>
+                <span class="meta-val">lfm2.5-thinking:1.2b</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-key">Insight Interval</span>
+                <span class="meta-val">30 seconds</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-key">Protocol</span>
+                <span class="meta-val">Nordic UART / BLE 5</span>
+            </div>
+            <div class="status-pill">
+                <span class="pulse"></span>
+                <span id="statusMsg">Connecting...</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="main">
+
+        <!-- Stat row -->
+        <div class="stat-row">
+            <div class="stat-cell" style="--accent-line:var(--ax)">
+                <div class="stat-k">Samples</div>
+                <div class="stat-v" id="sSamples">0</div>
+                <div class="stat-sub">packets processed</div>
+            </div>
+            <div class="stat-cell" style="--accent-line:var(--ay)">
+                <div class="stat-k">Predictions</div>
+                <div class="stat-v" id="sPreds">0</div>
+                <div class="stat-sub">ML classifications</div>
+            </div>
+            <div class="stat-cell" style="--accent-line:var(--az)">
+                <div class="stat-k">Current Activity</div>
+                <div class="stat-v" id="sActivity" style="transition:color 0.4s">—</div>
+                <div class="stat-sub" id="sConfSub">waiting for data</div>
+            </div>
+            <div class="stat-cell" style="--accent-line:var(--ch4)">
+                <div class="stat-k">Confidence</div>
+                <div class="stat-v" id="sConf">—</div>
+                <div class="stat-sub">model certainty</div>
+            </div>
+            <div class="stat-cell" style="--accent-line:#60b060">
+                <div class="stat-k">AI Insights</div>
+                <div class="stat-v" id="sInsights">0</div>
+                <div class="stat-sub">LLM analyses</div>
+            </div>
+            <div class="stat-cell" style="--accent-line:var(--danger)">
+                <div class="stat-k">Alerts</div>
+                <div class="stat-v" id="sAlerts">0</div>
+                <div class="stat-sub">anomalies detected</div>
+            </div>
+        </div>
+
+        <!-- Main chart + activity -->
+        <div class="grid-main">
+            <div class="panel">
+                <div class="panel-head">
+                    <span class="panel-title">Acceleration Magnitude — Live Stream</span>
+                    <div class="legend-row">
+                        <div class="leg">
+                            <div class="leg-line" style="background:var(--mag)"></div>|a| magnitude
+                        </div>
+                        <div class="leg">
+                            <div class="leg-line" style="background:var(--danger);opacity:0.7"></div>high-g
+                        </div>
+                        <div class="leg">
+                            <div class="leg-line" style="background:var(--accent2);opacity:0.7"></div>low-g
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-wrap"><canvas id="cMag" height="100"></canvas></div>
+                </div>
+                <!-- Controls -->
+                <div class="ctrl-row">
+                    <button class="btn btn-accent" onclick="startSim()">Start Simulation</button>
+                    <button class="btn btn-warn" onclick="startBle()">Connect BLE</button>
+                    <button class="btn btn-muted" onclick="stopAll()">Stop</button>
+                    <button class="btn" style="background:#1a1020;color:#b57bee;border:1px solid #2a1840"
+                        onclick="resetAll()">Reset</button>
+                    <div class="speed-ctrl">
+                        <span>Speed:</span>
+                        <input type="range" id="speedSlider" min="1" max="20" value="5">
+                        <span id="speedVal">5x</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity panel -->
+            <div class="panel">
+                <div class="panel-head">
+                    <span class="panel-title">Activity Classification</span>
+                </div>
+                <div class="panel-body activity-panel">
+                    <div class="activity-label-sm">Detected Activity</div>
+                    <div class="activity-value" id="actBig">STANDBY</div>
+                    <div class="activity-conf">confidence: <b id="actConfBig">—</b></div>
+                </div>
+                <div style="padding:0 20px 16px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                    <div
+                        style="background:var(--bg);border:1px solid var(--border2);border-radius:2px;padding:10px;text-align:center">
+                        <div class="stat-k">Magnitude (avg)</div>
+                        <div style="font-family:'Syne';font-weight:700;font-size:16px;color:#f0f4f8" id="actMag">—</div>
+                    </div>
+                    <div
+                        style="background:var(--bg);border:1px solid var(--border2);border-radius:2px;padding:10px;text-align:center">
+                        <div class="stat-k">Elapsed Time</div>
+                        <div style="font-family:'Syne';font-weight:700;font-size:16px;color:#f0f4f8" id="actTime">0.0s
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- XYZ chart + AI Insights -->
+        <div class="grid-main">
+            <div class="panel">
+                <div class="panel-head">
+                    <span class="panel-title">Accelerometer X / Y / Z — Live</span>
+                    <div class="legend-row">
+                        <div class="leg">
+                            <div class="leg-line" style="background:var(--ax)"></div>X
+                        </div>
+                        <div class="leg">
+                            <div class="leg-line" style="background:var(--ay)"></div>Y
+                        </div>
+                        <div class="leg">
+                            <div class="leg-line" style="background:var(--az)"></div>Z
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-wrap"><canvas id="cAcc" height="100"></canvas></div>
+                </div>
+            </div>
+
+            <!-- AI Insights -->
+            <div class="panel" style="display:flex;flex-direction:column">
+                <div class="panel-head">
+                    <span class="panel-title">LLM Agent Insights</span>
+                    <span class="panel-badge"
+                        style="background:#00c2a810;color:var(--accent);border:1px solid #00c2a825">every 30s</span>
+                </div>
+                <div class="thinking-bar" id="thinkBar">
+                    <span>Analyzing</span>
+                    <span class="dots"><span>.</span><span>.</span><span>.</span></span>
+                </div>
+                <div class="insight-scroll" id="insightList" style="flex:1">
+                    <div class="no-data" id="noInsight">Waiting for data accumulation.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Row: Env Charts & Alerts -->
+        <div class="grid-main">
+            <div class="panel">
+                <div class="panel-head">
+                    <span class="panel-title">Magnetometer / Temperature / Battery</span>
+                </div>
+                <div class="panel-body grid-3col" style="padding:14px 20px;">
+                    <div class="chart-wrap">
+                        <div class="stat-k" style="margin-bottom:4px;color:var(--ch4)">Magnetometer Z</div><canvas
+                            id="cMagZ" height="80"></canvas>
+                    </div>
+                    <div class="chart-wrap">
+                        <div class="stat-k" style="margin-bottom:4px;color:#e8b84b">Temperature °C</div><canvas
+                            id="cTemp" height="80"></canvas>
+                    </div>
+                    <div class="chart-wrap">
+                        <div class="stat-k" style="margin-bottom:4px;color:#30c060">Battery %</div><canvas id="cBat"
+                            height="80"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts -->
+            <div class="panel" style="display:flex;flex-direction:column">
+                <div class="panel-head">
+                    <span class="panel-title">Alert Log</span>
+                    <span class="panel-badge"
+                        style="background:#e0555510;color:var(--danger);border:1px solid #e0555525">real-time</span>
+                </div>
+                <div class="alert-scroll" id="alertList" style="flex:1">
+                    <div class="no-data" id="noAlert">No anomalies detected.</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const COLORS = { diam: '#00c2a8', duduk: '#e8b84b', jalan: '#5b9cf6', lari: '#b57bee', jatuh: '#e05555', unknown: '#4a5568' };
+        const socket = io();
+        let sampleCount = 0, predCount = 0, insightCount = 0, alertCount = 0;
+
+        // Speed slider
+        const slider = document.getElementById('speedSlider');
+        slider.oninput = () => document.getElementById('speedVal').textContent = slider.value + 'x';
+
+        // ── Charts ──
+        const cfgBase = {
+            responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
+            scales: {
+                x: { display: true, ticks: { color: '#2a3040', font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 8 }, grid: { color: '#1a1f28' } },
+                y: { ticks: { color: '#3a4458', font: { family: 'DM Mono', size: 9 } }, grid: { color: '#1a1f28' } }
+            },
+            plugins: { legend: { display: false } }
+        };
+
+        const magChart = new Chart(document.getElementById('cMag').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [], datasets: [
+                    { data: [], borderColor: '#f0f4f8', backgroundColor: 'rgba(240,244,248,0.04)', borderWidth: 1.2, pointRadius: 0, fill: true, tension: 0.3 }
+                ]
+            },
+            options: cfgBase
+        });
+
+        const accChart = new Chart(document.getElementById('cAcc').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [], datasets: [
+                    { data: [], borderColor: '#5b9cf6', borderWidth: 1, pointRadius: 0, tension: 0.3 },
+                    { data: [], borderColor: '#00c2a8', borderWidth: 1, pointRadius: 0, tension: 0.3 },
+                    { data: [], borderColor: '#e8b84b', borderWidth: 1, pointRadius: 0, tension: 0.3 }
+                ]
+            },
+            options: cfgBase
+        });
+
+        const cMagZ = new Chart(document.getElementById('cMagZ').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#b57bee', borderWidth: 1, pointRadius: 0, tension: 0.3 }] }, options: cfgBase });
+        const cTemp = new Chart(document.getElementById('cTemp').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#e8b84b', backgroundColor: '#e8b84b15', fill: true, borderWidth: 1, pointRadius: 0, tension: 0.3 }] }, options: cfgBase });
+        const cBat = new Chart(document.getElementById('cBat').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#30c060', backgroundColor: '#30c06015', fill: true, borderWidth: 1, pointRadius: 0, tension: 0.3 }] }, options: cfgBase });
+
+        const MAX_PTS = 150;
+        let lastChartT = 0;
+
+        // ── Socket events ──
+        socket.on('connect', () => {
+            document.getElementById('statusMsg').textContent = 'CONNECTED';
+        });
+
+        socket.on('sensor_data', d => {
+            sampleCount++;
+            document.getElementById('sSamples').textContent = sampleCount;
+            document.getElementById('actTime').textContent = d.t.toFixed(1) + 's';
+            document.getElementById('actMag').textContent = d.mag.toFixed(0);
+
+            // Mag chart
+            magChart.data.labels.push(d.t.toFixed(1));
+            magChart.data.datasets[0].data.push(d.mag);
+            if (magChart.data.labels.length > MAX_PTS) { magChart.data.labels.shift(); magChart.data.datasets[0].data.shift(); }
+
+            // Acc chart
+            accChart.data.labels.push(d.t.toFixed(1));
+            accChart.data.datasets[0].data.push(d.ax);
+            accChart.data.datasets[1].data.push(d.ay);
+            accChart.data.datasets[2].data.push(d.az);
+            if (accChart.data.labels.length > MAX_PTS) {
+                accChart.data.labels.shift();
+                accChart.data.datasets.forEach(ds => ds.data.shift());
+            }
+
+            // Env charts
+            [cMagZ, cTemp, cBat].forEach(ch => {
+                ch.data.labels.push(d.t.toFixed(1));
+                if (ch.data.labels.length > MAX_PTS) ch.data.labels.shift();
+            });
+            cMagZ.data.datasets[0].data.push(d.ch4);
+            cTemp.data.datasets[0].data.push(d.temp);
+            cBat.data.datasets[0].data.push(d.bat);
+            if (cMagZ.data.datasets[0].data.length > MAX_PTS) {
+                cMagZ.data.datasets[0].data.shift();
+                cTemp.data.datasets[0].data.shift();
+                cBat.data.datasets[0].data.shift();
+            }
+
+            if (sampleCount % 3 === 0) {
+                magChart.update(); accChart.update(); cMagZ.update(); cTemp.update(); cBat.update();
+            }
+        });
+
+        socket.on('prediction', p => {
+            predCount++;
+            document.getElementById('sPreds').textContent = predCount;
+            const c = COLORS[p.activity] || COLORS.unknown;
+            document.getElementById('sActivity').textContent = p.activity.toUpperCase();
+            document.getElementById('sActivity').style.color = c;
+            document.getElementById('sConf').textContent = p.confidence + '%';
+            document.getElementById('sConfSub').textContent = 'last prediction';
+            document.getElementById('actBig').textContent = p.activity.toUpperCase();
+            document.getElementById('actBig').style.color = c;
+            document.getElementById('actConfBig').textContent = p.confidence + '%';
+            magChart.data.datasets[0].borderColor = c;
+            magChart.data.datasets[0].backgroundColor = c + '12';
+        });
+
+        socket.on('ai_insight', ins => {
+            insightCount++;
+            document.getElementById('sInsights').textContent = insightCount;
+            document.getElementById('thinkBar').classList.remove('show');
+            const list = document.getElementById('insightList');
+            const nd = document.getElementById('noInsight');
+            if (nd) nd.remove();
+            const div = document.createElement('div');
+            div.className = 'insight-entry';
+            const tags = Object.entries(ins.summary || {}).map(([k, v]) =>
+                '<span class="insight-tag">' + k + ': ' + v + '</span>').join('');
+            div.innerHTML = '<div class="insight-meta"><span class="insight-time">' + ins.timestamp +
+                '</span><span class="insight-tag">conf: ' + ins.avg_confidence + '%</span></div>' +
+                '<div class="insight-tags" style="margin-bottom:8px">' + tags + '</div>' +
+                '<div class="insight-text">' + ins.insight + '</div>';
+            list.prepend(div);
+        });
+
+        socket.on('ai_status', s => {
+            document.getElementById('thinkBar').classList.toggle('show', s.status === 'thinking');
+        });
+
+        socket.on('alert', a => {
+            alertCount++;
+            document.getElementById('sAlerts').textContent = alertCount;
+            const list = document.getElementById('alertList');
+            const nd = document.getElementById('noAlert');
+            if (nd) nd.remove();
+            const div = document.createElement('div');
+            div.className = 'alert-entry';
+            div.innerHTML = '<div class="alert-time">' + a.timestamp + '</div>' + a.message;
+            list.prepend(div);
+        });
+
+        socket.on('status', s => {
+            document.getElementById('statusMsg').textContent = (s.message || '').toUpperCase();
+        });
+
+        function startSim() {
+            sampleCount = 0; predCount = 0;
+            socket.emit('start_simulation', { speed: parseInt(slider.value) });
+        }
+        function startBle() {
+            sampleCount = 0; predCount = 0;
+            socket.emit('start_ble', {});
+        }
+        function stopAll() {
+            socket.emit('stop', {});
+        }
+        function resetAll() {
+            fetch('/api/reset', { method: 'POST' });
+        }
+        socket.on('reset', () => {
+            sampleCount = 0; predCount = 0; insightCount = 0; alertCount = 0;
+            ['sSamples', 'sPreds', 'sConf', 'sInsights', 'sAlerts'].forEach(id => {
+                const el = document.getElementById(id); if (el) el.textContent = '0';
+            });
+            document.getElementById('sActivity').textContent = '—';
+            document.getElementById('sActivity').style.color = '';
+            document.getElementById('sConfSub').textContent = 'waiting for data';
+            document.getElementById('actBig').textContent = 'STANDBY';
+            document.getElementById('actBig').style.color = '';
+            document.getElementById('actConfBig').textContent = '—';
+            document.getElementById('actMag').textContent = '—';
+            document.getElementById('actTime').textContent = '0.0s';
+            document.getElementById('statusMsg').textContent = 'RESET';
+            document.getElementById('insightList').innerHTML = '<div class="no-data" id="noInsight">Waiting for data accumulation.</div>';
+            document.getElementById('alertList').innerHTML = '<div class="no-data" id="noAlert">No anomalies detected.</div>';
+            magChart.data.labels = []; magChart.data.datasets[0].data = [];
+            magChart.data.datasets[0].borderColor = '#f0f4f8';
+            magChart.data.datasets[0].backgroundColor = 'rgba(240,244,248,0.04)';
+            magChart.update();
+            accChart.data.labels = []; accChart.data.datasets.forEach(ds => ds.data = []);
+            accChart.update();
+            [cMagZ, cTemp, cBat].forEach(ch => {
+                ch.data.labels = []; ch.data.datasets[0].data = []; ch.update();
+            });
+        });
+    </script>
+</body>
+
+</html>

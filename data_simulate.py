@@ -3,68 +3,58 @@ const { MongoClient } = require('mongodb');
 const mongoUrl = 'mongodb://utl:2041$$@218.161.3.98:27017/';
 const dbName = 'DCA632971FC3';
 const collectionName = 'posture_data';
-const DEVICE_ID = "SIM_DCA632971FC3";
 
 async function startSimulation() {
     const client = new MongoClient(mongoUrl);
     try {
         await client.connect();
-        console.log(`✅ Simulasi Multi-Fase dimulai untuk: ${DEVICE_ID}`);
+        console.log(`✅ Simulasi Multi-Node dimulai untuk Receiver: DCA632971FC3`);
         const col = client.db(dbName).collection(collectionName);
         
-        let hr = 75;
-        let spo2 = 98;
-        let state = "NORMAL"; // NORMAL -> DETERIORATING -> EMERGENCY
-        let ticks = 0;
-
         setInterval(async () => {
-            ticks++;
-            
-            // --- LOGIKA PERUBAHAN FASE ---
-            if (ticks < 30) {
-                state = "NORMAL";
-                hr = 75 + Math.floor(Math.random() * 5);
-                spo2 = 98;
-                posture = 1; // Sitting
-                area = 2;    // Laboratory
-            } else if (ticks < 60) {
-                state = "DETERIORATING"; // Memicu Predictor Agent
-                hr += 1;   // HR perlahan naik (Tachycardia trend)
-                spo2 -= 0.2; // SpO2 perlahan turun (Hypoxia trend)
-                posture = 2; // Standing
-                area = 3;    // Corridor
-            } else if (ticks < 70) {
-                state = "EMERGENCY"; // Memicu Monitor & Alert Agent
-                hr = 125;
-                spo2 = 85;
-                posture = 5; // FALL!
-                area = 6;    // Bathroom (Contextual Risk)
-            } else {
-                ticks = 0; // Reset siklus
-            }
+            const now = new Date();
 
-            const dummyData = {
-                timestamp: new Date(),
-                device_ID: DEVICE_ID,
-                HR: Math.floor(hr),
-                Blood_oxygen: Math.floor(spo2),
-                Posture_state: posture,
-                Area: area,
-                // Variabel fisik tetap disertakan agar data terlihat real
-                ACC_X: 0.01, ACC_Y: 0.02, ACC_Z: -1,
-                MAG_X: 50, MAG_Y: -400, MAG_Z: -150,
-                safe_battery: 80, band_battery: 30,
-                Step: 100 + ticks,
+            // --- NODE 1 (Dari Gambar 1) ---
+            const node1 = {
+                timestamp: now,
+                device_id: "DCA632971FC3",
+                safe_Mac: "EDCE94AA94CB",
+                band_Mac: "D612D90022EB",
+                HR: 92 + Math.floor(Math.random() * 3), // Sedikit fluktuatif agar tampak hidup
+                Blood_oxygen: 95,
+                Posture_state: 10, // Unstable Temp
+                Area: 4,           // Dining Table
+                safe_battery: 75,
+                band_battery: 16,
+                Step: 27,
+                Calories: 1,
                 is_simulated: true
             };
 
-            await col.insertOne(dummyData);
-            console.log(`[${state}] Sent: HR ${dummyData.HR} | SpO2 ${dummyData.Blood_oxygen} | Posture ${posture}`);
+            // --- NODE 2 (Dari Gambar 2) ---
+            const node2 = {
+                timestamp: now,
+                device_id: "DCA632971FC3",
+                safe_Mac: "C06EAC5BF9B0",
+                band_Mac: "D612D90013FD",
+                HR: 85 + Math.floor(Math.random() * 3),
+                Blood_oxygen: 98,
+                Posture_state: 1,  // Sitting
+                Area: 7,           // Bedroom
+                safe_battery: 100,
+                band_battery: 88,
+                Step: 112,
+                Calories: 3,
+                is_simulated: true
+            };
 
-        }, 1000); // Kirim setiap 1 detik
+            await col.insertMany([node1, node2]);
+            console.log(`[Simulasi PUSH] 🚀 Node 1 SAFE ${node1.safe_Mac} | Node 2 SAFE ${node2.safe_Mac}`);
+
+        }, 1500); // Kirim setiap 1.5 detik agar backend tidak shock lint
 
     } catch (err) {
-        console.error("❌ Error:", err);
+        console.error("❌ Error Simulator:", err);
     }
 }
-startSimulation();
+startSimulation();

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTLMediCore Health Report - C5945F0F59FB_D612D9000180</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: #0f172a; /* Slate 900 */
+            color: #cbd5e1; /* Slate 300 */
+            padding: 20px;
+        }
+        .container { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            background: #1e293b; /* Slate 800 */
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+        .header { 
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: #f8fafc;
+            padding: 40px;
+            text-align: center;
+            border-bottom: 2px solid #00ffcc;
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; color: #00ffcc; }
+        .header .device-id { font-size: 1.2em; opacity: 0.9; font-family: monospace; }
+        .content { padding: 40px; }
+        
+        .metadata { 
+            background: #0f172a;
+            border-left: 4px solid #00ffcc;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        .metadata-item { margin: 8px 0; }
+        .metadata-label { font-weight: 600; color: #94a3b8; }
+        
+        h2 { 
+            color: #00ffcc;
+            margin: 30px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .risk-banner {
+            text-align: center;
+            padding: 30px;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .risk-HIGH { background: rgba(220, 38, 38, 0.2); color: #ef4444; border: 2px solid #ef4444; }
+        .risk-MEDIUM { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 2px solid #f59e0b; }
+        .risk-LOW { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 2px solid #10b981; }
+        
+        .stat-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 20px; 
+            margin: 20px 0; 
+        }
+        .stat-card { 
+            background: #0f172a;
+            color: #f8fafc;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+        .stat-label { 
+            font-size: 0.9em; 
+            color: #00ffcc;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        .stat-value { 
+            font-size: 2.5em; 
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-detail { 
+            font-size: 0.9em; 
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+        
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 20px 0;
+            background: #0f172a;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+        thead { background: #00ffcc; color: #0f172a; }
+        th, td { 
+            text-align: left; 
+            padding: 15px;
+        }
+        th { font-weight: 700; text-transform: uppercase; font-size: 0.9em; letter-spacing: 0.5px; }
+        tbody tr { border-bottom: 1px solid #334155; }
+        tbody tr:hover { background: #1e293b; }
+        
+        .alert-item { 
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid;
+            background: #0f172a;
+        }
+        .alert-CRITICAL { border-color: #ef4444; color: #fca5a5; }
+        .alert-WARNING { border-color: #f59e0b; color: #fde68a; }
+        .alert-timestamp { 
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .footer { 
+            background: #0f172a;
+            padding: 30px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.9em;
+            border-top: 1px solid #334155;
+        }
+        
+        .no-data { 
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+            font-style: italic;
+            background: #0f172a;
+            border-radius: 8px;
+        }
+        
+        @media print {
+            body { background: white; color: black; padding: 0; }
+            .container { box-shadow: none; border: none; }
+            table, .metadata, .stat-card, .footer {
+                background: white !important;
+                color: black !important;
+                border: 1px solid #ccc !important;
+            }
+            thead { background: #eee !important; color: black !important; }
+            h2, .stat-label { color: black !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>UTLMediCore Health Report</h1>
+            <div class="device-id">Patient Device: C5945F0F59FB_D612D9000180</div>
+        </div>
+        
+        <div class="content">
+            <div class="metadata">
+                <div class="metadata-item">
+                    <span class="metadata-label">Report Period:</span> 2026-03-26 23:28:04 to 2026-03-27 17:28:04
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Duration:</span> 18 hours
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Generated:</span> 2026-03-27 17:28:04
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">System:</span> UTLMediCore Agentic AI v1.0
+                </div>
+            </div>
+            
+            <h2>Risk Assessment</h2>
+            <div class="risk-banner risk-LOW">
+                Risk Level: LOW (0.00)
+            </div>
+
+            <h2>Expert AI Analysis</h2>
+            <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 30px; line-height: 1.8; color: #f8fafc;">
+                # Clinical Health Executive Summary<br>This report provides a comprehensive analysis of the patient's health data, focusing on vital signs, activity levels, and dietary habits. The patient exhibits a predominantly sedentary lifestyle, with a concerning caloric intake that significantly exceeds energy expenditure. The dietary pattern includes high-calorie and high-sodium meals, which may pose future health risks if not addressed.<br><br>## Analytical Insights and Pathophysiology<br>The patient’s vital signs were stable throughout the monitoring period, with an average heart rate of 80.3 bpm and blood oxygen saturation (SpO2) averaging 97.1%. However, the patient spent the entire monitoring duration in an "Unknown" area, limiting the ability to assess environmental impacts on health. Activity logs indicate that the patient was predominantly sedentary, with only a single active session of tennis recorded on March 26 for 2 hours. This sedentary behavior correlates with the logged meals, which are high in calories and carbohydrates, potentially leading to weight gain and associated health risks.<br><br>For instance, on March 26 at 12:23, the patient consumed rice with fried chicken and cabbage (~700 kcal), and later that day at 23:02, they had chicken with an omelet, mushroom soup, and instant noodles (~800 kcal). Such meals, combined with minimal physical activity, contribute to a net positive caloric balance, which could lead to weight gain if the current lifestyle continues.<br><br>## Dietary and Lifestyle Assessment<br>The patient's dietary intake and activity levels were logged as follows:<br><br>- **Meals**:<br>  - At 06:13, the patient ate a banana (~100 kcal).<br>  - At 08:10, the patient had nasi goreng with a fried egg (~600 kcal).<br>  - At 12:23, the patient consumed rice with fried chicken, cabbage, and baby corn with half sugar black tea (~700 kcal).<br>  - At 23:02, the patient ate chicken with an omelet, mushroom soup, and instant noodles (~800 kcal).<br>  - At 19:06 on March 25, the patient had rice with chicken and chilies (~600 kcal).<br><br>- **Activities**:<br>  - At 07:59, the patient woke up from sleep.<br>  - At 14:29, they reported sitting at their laptop working for 2 hours.<br>  - At 19:01, the patient played tennis for 2 hours.<br>  - At 08:24, they woke up from lying down.<br>  - At 00:23, they went to sleep.<br><br>The patient’s meals are spaced throughout the day with a frequency of approximately 3-4 meals, but the variety is limited, and the meals are predominantly carbohydrate-heavy with high-calorie content. The sleep-wake cycle appears consistent, with waking times around 07:59 and sleeping around 00:23. However, the majority of the day is spent in sedentary activities, which could lead to health risks such as cardiovascular issues or metabolic syndrome.<br><br>## Risk and Anomaly Detection<br>There are notable discrepancies in the patient's activity logs. Despite reporting 2 hours of tennis on March 26, the average step count was low at 167 steps, suggesting potential sensor errors or underreporting of activity. Additionally, the lack of varied locations and the predominance of high-calorie meals raise concerns about potential health risks, including weight gain and cardiovascular issues due to high sodium content in meals like fried chicken and instant noodles.<br><br>## Expert Recommendations<br>- **Increase Physical Activity**: After sitting for 2 hours at the laptop, as logged on March 27 at 14:29, the patient should take a 5-minute walk to improve circulation and reduce sedentary time.<br>- **Modify Meal Timing**: Consider shifting the nasi goreng dinner logged on March 26 to before 20:00 for better digestive rest and to avoid late-night eating.<br>- **Nutritional Balance**: Incorporate more vegetables and lean proteins into meals. For instance, replacing one high-calorie meal with a salad or a vegetable-based dish can help balance caloric intake.<br>- **Monitor Sodium Intake**: Reduce meals high in sodium, such as the instant noodles logged on March 26 at 23:02, to mitigate cardiovascular risks.<br>- **Engage in Varied Activities**: Encourage the patient to engage in different forms of physical activity beyond tennis to promote overall fitness and reduce the risks associated with a sedentary lifestyle.
+            </div>
+
+            <h2>Semantic Memory Records (Graphiti)</h2>
+            <div style="background: rgba(139, 92, 246, 0.1); border-left: 4px solid #8b5cf6; padding: 20px; border-radius: 8px; margin-bottom: 30px; line-height: 1.6; color: #f8fafc;">
+                ACTIVITY DURATION SUMMARY for Patient C5945F0F59FB_D612D9000180:
+Based on 2 recorded snapshots.
+
+Monitoring period: 2026-03-27 11:39 to 2026-03-27 14:32 (2.9 hours total)
+
+Time spent in each posture:
+  Device Taken Off: 2h 52min
+
+Time spent in each location:
+  Unknown Area: 2h 52min
+
+Step count — avg: 167, max recorded: 167
+            </div>
+
+            <h2>Manual Patient Logs (Self-Reported Data)</h2>
+            <div style="background: rgba(0, 255, 204, 0.06); border: 1px solid rgba(0, 255, 204, 0.25); border-radius: 12px; padding: 20px; margin-bottom: 30px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <span style="background: #00ffcc; color: #0f172a; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px;">Data Source</span>
+                    <span style="color: #94a3b8; font-size: 0.9em;">These logs were manually entered by the patient or caregiver and were <strong style="color: #00ffcc;">used as input data</strong> for the AI Expert Analysis and Recommendations above.</span>
+                </div>
+                <table style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th style="width: 160px;">Timestamp (UTC+8)</th>
+                            <th style="width: 120px;">Category</th>
+                            <th>Patient Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-27 14:49</td>
+                            <td><span style="background: #facc1522; color: #facc15; border: 1px solid #facc1544; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Activity</span></td>
+                            <td>in sit in front of my laptop for 2 hours</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-27 13:09</td>
+                            <td><span style="background: #00ffcc22; color: #00ffcc; border: 1px solid #00ffcc44; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Meal</span></td>
+                            <td>i eat rice, with grilled chicken and also vegetables and chilies</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-27 08:24</td>
+                            <td><span style="background: #facc1522; color: #facc15; border: 1px solid #facc1544; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Activity</span></td>
+                            <td>i just woke up from lying down and from sleep</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 23:02</td>
+                            <td><span style="background: #00ffcc22; color: #00ffcc; border: 1px solid #00ffcc44; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Meal</span></td>
+                            <td>i eat chicken with omelete with mushroom soup with instant noodles</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 19:01</td>
+                            <td><span style="background: #facc1522; color: #facc15; border: 1px solid #facc1544; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Activity</span></td>
+                            <td>i play tennis for 2 hours</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 14:29</td>
+                            <td><span style="background: #facc1522; color: #facc15; border: 1px solid #facc1544; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Activity</span></td>
+                            <td>i sitting infront of my laptop to do my work for 2 hours since the start of the timestamp and in every  sveral minutes i drink water, and im also listening music</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 12:23</td>
+                            <td><span style="background: #00ffcc22; color: #00ffcc; border: 1px solid #00ffcc44; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Meal</span></td>
+                            <td>i just ate rice with fried chicken with cabbage and baby corn with half sugar black tea</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 08:10</td>
+                            <td><span style="background: #00ffcc22; color: #00ffcc; border: 1px solid #00ffcc44; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Meal</span></td>
+                            <td>Had nasi goreng + fried egg for dinner, approximately 600 kcal</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 07:59</td>
+                            <td><span style="background: #facc1522; color: #facc15; border: 1px solid #facc1544; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Activity</span></td>
+                            <td>i just woke up from sleep</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 00:23</td>
+                            <td><span style="background: #facc1522; color: #facc15; border: 1px solid #facc1544; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Activity</span></td>
+                            <td>i will go sleep and lying at my bed now</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 06:13</td>
+                            <td><span style="background: #00ffcc22; color: #00ffcc; border: 1px solid #00ffcc44; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Meal</span></td>
+                            <td>User just ate a banana</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-26 00:26</td>
+                            <td><span style="background: #facc1522; color: #facc15; border: 1px solid #facc1544; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Activity</span></td>
+                            <td>i will g so sleep ang lying at my bed now</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">2026-03-25 19:06</td>
+                            <td><span style="background: #00ffcc22; color: #00ffcc; border: 1px solid #00ffcc44; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">Meal</span></td>
+                            <td>i eat rice with chicken and chilies</td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+            <h2>Vital Signs Summary</h2>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Heart Rate</div>
+                    <div class="stat-value">80.3 <small style="font-size:0.5em">bpm</small></div>
+                    <div class="stat-detail">
+                        📊 Range: 73 - 91 bpm<br>
+                        📈 Std Dev: ±5.29 bpm<br>
+                        ⚠️ Abnormal: 0 readings
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Blood Oxygen</div>
+                    <div class="stat-value">97.1 <small style="font-size:0.5em">%</small></div>
+                    <div class="stat-detail">
+                        📊 Range: 95 - 99%<br>
+                        🫁 Hypoxia Events: 0<br>
+                        📍 Total Readings: 100
+                    </div>
+                </div>
+            </div>
+
+            <h2>Nutritional Analysis</h2>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Avg. Calorie Intake</div>
+                    <div class="stat-value">10.0 <small style="font-size:0.5em">Kcal</small></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg. Calorie Burned</div>
+                    <div class="stat-value">0.0 <small style="font-size:0.5em">Kcal</small></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Net Balance</div>
+                    <div class="stat-value">10.0 <small style="font-size:0.5em">Kcal</small></div>
+                    <div class="stat-detail">Status: <strong>Balanced</strong></div>
+                </div>
+            </div>
+
+            <h2>Activity Summary</h2>
+
+            <p><strong>Most Common Activity:</strong> Sitting</p>
+            <p><strong>Total Readings:</strong> 100</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Activity/Posture</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td>Sitting</td>
+                        <td>100</td>
+                        <td>100.0%</td>
+                    </tr>
+
+                </tbody>
+            </table>
+
+            <h2>Location Analysis</h2>
+
+            <p><strong>Most Visited Location:</strong> Unknown</p>
+            <p><strong>Unique Locations:</strong> 1</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Location</th>
+                        <th>Visit Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td>Unknown</td>
+                        <td>100</td>
+                    </tr>
+
+                </tbody>
+            </table>
+
+            <h2>Alerts Summary</h2>
+            <p><strong>Total Alerts:</strong> 0</p>
+<div class="no-data">✅ No alerts in this time period</div>
+            <h2>Agent Activity Summary</h2>
+            <p><strong>Total Agent Activities:</strong> 32</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Agent</th>
+                        <th>Activity Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td>Coordinator Agent</td>
+                        <td>8</td>
+                    </tr>
+
+                    <tr>
+                        <td>Monitor Agent</td>
+                        <td>8</td>
+                    </tr>
+
+                    <tr>
+                        <td>Analyzer Agent</td>
+                        <td>8</td>
+                    </tr>
+
+                    <tr>
+                        <td>Predictor Agent</td>
+                        <td>8</td>
+                    </tr>
+
+                </tbody>
+            </table>
+
+        </div>
+        
+        <div class="footer">
+            <p><strong>🏥 UTLMediCore Agentic AI System</strong></p>
+            <p>This report is generated by autonomous AI agents for informational purposes.</p>
+            <p>All findings should be reviewed by qualified medical personnel.</p>
+            <p style="margin-top: 15px; font-size: 0.85em;">© 2026 UTLMediCore | Advanced Health Monitoring</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -26,7 +26,7 @@ class ReportGenerator:
     """Generate comprehensive health reports for patients"""
     
     @staticmethod
-    def generate_report(patient_state, alerts, agent_logs, time_range_hours=24, graph_memory_summary="", ai_narrative="", extra_data=None, model_caller=None):
+    def generate_report(patient_state, alerts, agent_logs, time_range_hours=24, graph_memory_summary="", ai_narrative="", extra_data=None, model_caller=None, manual_context=None):
         """
         Generate comprehensive health report
         
@@ -90,6 +90,7 @@ class ReportGenerator:
             'vital_signs': ReportGenerator._analyze_vitals(recent_data),
             'activity_summary': ReportGenerator._analyze_activities(recent_data),
             'location_analysis': ReportGenerator._analyze_locations(recent_data),
+            'nutritional_analysis': ReportGenerator._analyze_calories(recent_data),
             'alerts_summary': ReportGenerator._summarize_alerts(recent_alerts),
             'agent_activity': ReportGenerator._summarize_agent_logs(recent_logs),
             'risk_assessment': {
@@ -112,11 +113,13 @@ class ReportGenerator:
                         vital_signs=report['vital_signs'],
                         activities=report['activity_summary'],
                         locations=report['location_analysis'],
+                        nutrition=report['nutritional_analysis'],
                         alerts=report['alerts_summary'],
                         risk_score=patient_state.risk_score,
                         graphiti_summary=graph_memory_summary,
                         time_range_hours=time_range_hours,
-                        model_caller=model_caller
+                        model_caller=model_caller,
+                        manual_context=manual_context
                     )
                     print(f"[REPORT] AI narrative generated via Lite Agent")
                 except Exception as e:
@@ -132,10 +135,12 @@ class ReportGenerator:
                         vital_signs=report['vital_signs'],
                         activities=report['activity_summary'],
                         locations=report['location_analysis'],
+                        nutrition=report['nutritional_analysis'],
                         alerts=report['alerts_summary'],
                         risk_score=patient_state.risk_score,
                         graphiti_summary=graph_memory_summary,
-                        time_range_hours=time_range_hours
+                        time_range_hours=time_range_hours,
+                        manual_context=manual_context
                     )
                     # Check if it returned the generic fallback starting with '## Executive Summary'
                     if ai_narrative and ai_narrative.strip().startswith('## Executive Summary'):
@@ -290,6 +295,47 @@ class ReportGenerator:
         }
     
     @staticmethod
+    def _analyze_calories(data):
+        """Analyze calorie intake vs burned"""
+        if not data:
+            return {
+                'average_intake': 0,
+                'average_burned': 0,
+                'total_intake': 0,
+                'total_burned': 0,
+                'net_balance': 0,
+                'status': 'No data'
+            }
+        
+        intakes = [int(d.get('Calories', d.get('calories', 0))) for d in data]
+        burns = [int(d.get('Calories_burned', d.get('calories_burned', 0))) for d in data]
+        
+        avg_in = np.mean(intakes) if intakes and any(i > 0 for i in intakes) else 0
+        avg_out = np.mean(burns) if burns else 0
+        
+        net = avg_in - avg_out
+        
+        if avg_in == 0:
+            status = "Monitoring Burned Only (No Intake Logged)"
+        elif net < -500:
+            status = "Significant Deficit"
+        elif net < 0:
+            status = "Mild Deficit"
+        elif net > 500:
+            status = "Significant Surplus"
+        else:
+            status = "Balanced"
+            
+        return {
+            'average_intake': round(float(avg_in), 1),
+            'average_burned': round(float(avg_out), 1),
+            'total_intake': int(np.sum(intakes)),
+            'total_burned': int(np.sum(burns)),
+            'net_balance': round(float(net), 1),
+            'status': status
+        }
+    
+    @staticmethod
     def _summarize_alerts(alerts):
         """Summarize alerts"""
         severity_count = Counter([a.get('severity', 'UNKNOWN') for a in alerts])
@@ -333,6 +379,7 @@ class ReportGenerator:
         locations = report_data['location_analysis']
         alerts = report_data['alerts_summary']
         risk = report_data['risk_assessment']
+        nutrition = report_data.get('nutritional_analysis', {})
         agent_activity = report_data['agent_activity']
         graph_mem = report_data.get('graph_memory_summary', '')
         ai_nar = report_data.get('ai_narrative', '')
@@ -508,27 +555,27 @@ class ReportGenerator:
 <body>
     <div class="container">
         <div class="header">
-            <h1> UTLMediCore Health Report</h1>
+            <h1>UTLMediCore Health Report</h1>
             <div class="device-id">Patient Device: {metadata['device_id']}</div>
         </div>
         
         <div class="content">
             <div class="metadata">
                 <div class="metadata-item">
-                    <span class="metadata-label">📅 Report Period:</span> {start_time} to {end_time}
+                    <span class="metadata-label">Report Period:</span> {start_time} to {end_time}
                 </div>
                 <div class="metadata-item">
-                    <span class="metadata-label">⏱️ Duration:</span> {metadata['time_range']['duration_hours']} hours
+                    <span class="metadata-label">Duration:</span> {metadata['time_range']['duration_hours']} hours
                 </div>
                 <div class="metadata-item">
-                    <span class="metadata-label">🕐 Generated:</span> {generated_time}
+                    <span class="metadata-label">Generated:</span> {generated_time}
                 </div>
                 <div class="metadata-item">
-                    <span class="metadata-label">🤖 System:</span> UTLMediCore Agentic AI v{metadata.get('system_version', '1.0')}
+                    <span class="metadata-label">System:</span> UTLMediCore Agentic AI v{metadata.get('system_version', '1.0')}
                 </div>
             </div>
             
-            <h2> Risk Assessment</h2>
+            <h2>Risk Assessment</h2>
             <div class="risk-banner risk-{risk['risk_level']}">
                 Risk Level: {risk['risk_level']} ({risk['current_risk_score']:.2f})
             </div>
@@ -542,7 +589,7 @@ class ReportGenerator:
                     extensions=['extra', 'nl2br', 'sane_lists']
                 )
                 html += f"""
-            <h2>🤖 Expert AI Analysis</h2>
+            <h2>Expert AI Analysis</h2>
             <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 30px; line-height: 1.8; color: #f8fafc;">
                 {nar_html}
             </div>
@@ -551,7 +598,7 @@ class ReportGenerator:
                 # Fallback: render with real newlines as <br>
                 formatted_nar = "<br>".join(ai_nar.split("\n"))
                 html += f"""
-            <h2>🤖 Expert AI Analysis</h2>
+            <h2>Expert AI Analysis</h2>
             <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 30px; line-height: 1.8; color: #f8fafc;">
                 {formatted_nar}
             </div>
@@ -561,15 +608,70 @@ class ReportGenerator:
             # Format graph mem text as HTML paragraphs
             formatted_mem = "<br>".join(graph_mem.split("\\n"))
             html += f"""
-            <h2>💾 Semantic Memory Records (Graphiti)</h2>
+            <h2>Semantic Memory Records (Graphiti)</h2>
             <div style="background: rgba(139, 92, 246, 0.1); border-left: 4px solid #8b5cf6; padding: 20px; border-radius: 8px; margin-bottom: 30px; line-height: 1.6; color: #f8fafc;">
                 {formatted_mem}
             </div>
 """
 
+        # Manual Patient Logs (Meals, Activities, Medical Records)
+        manual_ctx = report_data.get('manual_context', [])
+        if manual_ctx:
+            html += """
+            <h2>Manual Patient Logs (Self-Reported Data)</h2>
+            <div style="background: rgba(0, 255, 204, 0.06); border: 1px solid rgba(0, 255, 204, 0.25); border-radius: 12px; padding: 20px; margin-bottom: 30px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <span style="background: #00ffcc; color: #0f172a; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px;">Data Source</span>
+                    <span style="color: #94a3b8; font-size: 0.9em;">These logs were manually entered by the patient or caregiver and were <strong style="color: #00ffcc;">used as input data</strong> for the AI Expert Analysis and Recommendations above.</span>
+                </div>
+                <table style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th style="width: 160px;">Timestamp (UTC+8)</th>
+                            <th style="width: 120px;">Category</th>
+                            <th>Patient Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+"""
+            for entry in manual_ctx:
+                from utils.tz_utils import utc_to_utc8
+                ts = utc_to_utc8(entry.get('timestamp', ''))
+                cat_raw = entry.get('name', 'unknown')
+                if cat_raw.startswith('meal'):
+                    cat_label = 'Meal'
+                    badge_color = '#00ffcc'
+                elif cat_raw.startswith('activity'):
+                    cat_label = 'Activity'
+                    badge_color = '#facc15'
+                elif cat_raw.startswith('medical'):
+                    cat_label = 'Medical Record'
+                    badge_color = '#a066ff'
+                else:
+                    cat_label = cat_raw
+                    badge_color = '#94a3b8'
+                content = entry.get('content', '')
+                html += f"""
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.85em; white-space: nowrap;">{ts}</td>
+                            <td><span style="background: {badge_color}22; color: {badge_color}; border: 1px solid {badge_color}44; padding: 3px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">{cat_label}</span></td>
+                            <td>{content}</td>
+                        </tr>
+"""
+            html += """
+                    </tbody>
+                </table>
+            </div>
+"""
+        else:
+            html += """
+            <h2>Manual Patient Logs (Self-Reported Data)</h2>
+            <div class="no-data">No manual logs were recorded by the patient or caregiver during this period. Encourage the patient to log meals, activities, and medical events for more accurate AI recommendations.</div>
+"""
+
         # Vital Signs
         html += """
-            <h2> Vital Signs Summary</h2>
+            <h2>Vital Signs Summary</h2>
 """
         
         if vitals.get('heart_rate', {}).get('readings_count', 0) > 0:
@@ -601,9 +703,34 @@ class ReportGenerator:
         else:
             html += '<div class="no-data">❌ No vital signs data available in this time range</div>'
         
+        # Nutrition Summary
+        html += """
+            <h2>Nutritional Analysis</h2>
+"""
+        if nutrition.get('status') != 'No data':
+            html += f"""
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Avg. Calorie Intake</div>
+                    <div class="stat-value">{nutrition['average_intake']} <small style="font-size:0.5em">Kcal</small></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg. Calorie Burned</div>
+                    <div class="stat-value">{nutrition['average_burned']} <small style="font-size:0.5em">Kcal</small></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Net Balance</div>
+                    <div class="stat-value">{nutrition['net_balance']} <small style="font-size:0.5em">Kcal</small></div>
+                    <div class="stat-detail">Status: <strong>{nutrition['status']}</strong></div>
+                </div>
+            </div>
+"""
+        else:
+            html += '<div class="no-data">No nutritional data available</div>'
+        
         # Activity Summary
         html += """
-            <h2> Activity Summary</h2>
+            <h2>Activity Summary</h2>
 """
         
         if activities.get('total_readings', 0) > 0:
@@ -635,11 +762,11 @@ class ReportGenerator:
             </table>
 """
         else:
-            html += '<div class="no-data">❌ No activity data available</div>'
+            html += '<div class="no-data">No activity data available</div>'
         
         # Location Analysis
         html += """
-            <h2>📍 Location Analysis</h2>
+            <h2>Location Analysis</h2>
 """
         
         if locations.get('locations_visited', 0) > 0:
@@ -669,11 +796,11 @@ class ReportGenerator:
             </table>
 """
         else:
-            html += '<div class="no-data">❌ No location data available</div>'
+            html += '<div class="no-data">No location data available</div>'
         
         # Alerts Summary
         html += f"""
-            <h2>🚨 Alerts Summary</h2>
+            <h2>Alerts Summary</h2>
             <p><strong>Total Alerts:</strong> {alerts['total_alerts']}</p>
 """
         
@@ -711,7 +838,7 @@ class ReportGenerator:
         
         # Agent Activity
         html += f"""
-            <h2> Agent Activity Summary</h2>
+            <h2>Agent Activity Summary</h2>
             <p><strong>Total Agent Activities:</strong> {agent_activity['total_activities']}</p>
 """
         

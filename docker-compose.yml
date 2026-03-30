@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  # 1. Aplikasi Flask Utama + AI API
+  medicore-backend:
+    build: .
+    container_name: medicore_app
+    ports:
+      - "7000:7000"
+    # Mapping agar file di laptop langsung sync ke docker (live testing)
+    volumes:
+      - .:/app
+    # Agar dari dalam container bisa tembus ke tunnel SSH (127.0.0.1:27018) di host laptop
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Setting Environment Variable, ganti 127.0.0.1 jadi host.docker.internal
+    environment:
+      - MONGO_URL=mongodb://viewer1:viewer1@host.docker.internal:27018/admin?authSource=admin&directConnection=true
+      - MONGO_COLLECTION=posture_data
+      - FLASK_PORT=7000
+      - FLASK_ENV=development
+    restart: always
+
+  # 2. Data Simulator Python (kalau suka dijalankan di background)
+  # Uncomment bagian ini kalau simulator ingin dijalankan dari Docker:
+  # data-simulator:
+  #   build: .
+  #   container_name: medicore_simulator
+  #   command: ["python", "data_simulate.py"]
+  #   volumes:
+  #     - .:/app
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   environment:
+  #     - MONGO_URL=mongodb://viewer1:viewer1@host.docker.internal:27018/admin?authSource=admin&directConnection=true
+  #   restart: unless-stopped
+
+  # 3. Neo4j Database (jika masih aktif di mesin Anda dan belum punya file compose sendiri)
+  # Uncomment bagian ini jika ingin menjalankan Neo4j bersama aplikasi:
+  # neo4j:
+  #   image: neo4j:5
+  #   container_name: medicore_neo4j
+  #   ports:
+  #     - "7474:7474" # HTTP Browser UI
+  #     - "7687:7687" # Bolt Protocol Port
+  #   environment:
+  #     - NEO4J_AUTH=none  # Ganti dengan 'neo4j/password_anda' jika menggunakan password
+  #   volumes:
+  #     - neo4j_data:/data
+  #   restart: always
+
+# Jika menggunakan Neo4j
+# volumes:
+#   neo4j_data:

@@ -154,7 +154,7 @@ class AgentConfig:
 # ======================
 
 class PatientState:
-    """Real-time patient state tracker with Hybrid Memory Architecture"""
+    """Real-time patient state tracker"""
     def __init__(self, device_id):
         self.device_id = device_id
         self.history = deque(maxlen=AgentConfig.PATTERN_DETECTION_WINDOW)
@@ -165,144 +165,33 @@ class PatientState:
         
         self.reading_count = 0
         
-        # ── HYBRID MEMORY STATE TRACKING ──────────────────────────────────
-        # Event-Driven: Track last confirmed posture & location
-        self._last_confirmed_posture = None   # Last posture written to Graphiti
-        self._last_confirmed_area = None      # Last area written to Graphiti
-        self._last_confirmed_hr_zone = None   # 'normal', 'high', 'low', 'off'
-        self._last_confirmed_hr = 0           # Keep track of EXACT last HR value
-        self._last_confirmed_spo2 = 0         # Keep track of EXACT last SpO2 value
-        
-        # Debounce: Track pending (unconfirmed) state changes
-        self._pending_posture = None          # Candidate new posture
-        self._pending_area = None             # Candidate new area
-        self._pending_since_count = 0         # How many readings the pending state has held
-        self._DEBOUNCE_THRESHOLD = 5          # Must hold new state for N readings (~10 sec at 2s/read)
-        
-        # Heartbeat: Periodic alive signal even during zero-change periods
-        self._HEARTBEAT_INTERVAL = 100        # Send 1 snapshot per 100 readings regardless
-        self._last_heartbeat_count = 0        # Last reading_count when heartbeat was sent
-        
         # Memory Layer (Graphiti)
         self.memory = PatientMemory(device_id)
         
     def add_data(self, data):
-        """Add new sensor reading with Hybrid Memory Architecture.
-        
-        Strategy:
-        1. ALWAYS feed realtime dashboard (no filtering)
-        2. CRITICAL events → instant Graphiti write (falls, abnormal vitals)
-        3. TRANSITION events → write only when posture/location CHANGES and holds stable (debounce)
-        4. HEARTBEAT → periodic alive signal every N readings during stable periods
-        """
+        """Add new sensor reading"""
         self.reading_count += 1
         data['timestamp'] = datetime.now()
         self.history.append(data)
         
-        # ── Extract current sensor state ──────────────────────────────────
+        # Memory Storage Logic:
+        # Determine if we should store this snapshot in permanent memory
         hr = int(data.get('HR', 0))
         spo2 = int(data.get('Blood_oxygen', 0))
         posture = int(data.get('Posture_state', 0))
-        area = int(data.get('Area', data.get('Lokasi', 0)))
         
-        # Classify HR zone for smart tracking
-        if hr == 0:
-            hr_zone = 'off'        # Device taken off
-        elif hr > 110 or hr < 45:
-            hr_zone = 'abnormal'   # Critical HR
-        else:
-            hr_zone = 'normal'
-        
-        # ── TIER 1: CRITICAL EVENT / STARTUP → Instant Write ──────────────
-        is_startup = (self._last_confirmed_posture is None)
-        
-        is_critical = (
-            posture == 5 or            # Fall detected!
-            (hr > 110 or (0 < hr < 45)) or  # Abnormal HR
-            (0 < spo2 < 90)            # Hypoxia
+        is_notable = (
+            posture == 5 or           # Fall
+            hr > 110 or hr < 45 or    # Abnormal HR
+            (0 < spo2 < 90)           # Low oxygen
         )
         
-        if is_critical or is_startup:
-            reason_txt = f"CRITICAL: posture={posture} hr={hr}" if is_critical else "STARTUP_INITIAL"
-            self._trigger_snapshot(data, reason=reason_txt)
-            
-            # Update confirmed state after write
-            self._last_confirmed_posture = posture
-            self._last_confirmed_area = area
-            self._last_confirmed_hr_zone = hr_zone
-            self._pending_posture = None
-            self._pending_area = None
-            self._pending_since_count = 0
-            return
-        
-        # ── TIER 2: TRANSITION DETECTION (with Debounce) ──────────────────
-        posture_changed = (posture != self._last_confirmed_posture)
-        area_changed = (area != self._last_confirmed_area)
-        hr_zone_changed = (hr_zone != self._last_confirmed_hr_zone)
-        
-        # Metric Delta Detector (Non-critical fluctuations)
-        hr_delta = abs(hr - self._last_confirmed_hr) if self._last_confirmed_hr else 0
-        spo2_delta = abs(spo2 - self._last_confirmed_spo2) if self._last_confirmed_spo2 else 0
-        
-        # Trigger if HR shifts by 10 bpm, or SpO2 shifts by 3%
-        metric_changed = (hr_delta >= 10) or (spo2_delta >= 3)
-        
-        state_changed = posture_changed or area_changed or hr_zone_changed or metric_changed
-        
-        if state_changed:
-            # Check if this is a NEW pending change or continuation of existing one
-            if posture == self._pending_posture and area == self._pending_area:
-                # Same pending state continues → increment stability counter
-                self._pending_since_count += 1
-            else:
-                # New candidate change → reset debounce counter
-                self._pending_posture = posture
-                self._pending_area = area
-                self._pending_since_count = 1
-            
-            # Has the new state held long enough to be considered stable?
-            if self._pending_since_count >= self._DEBOUNCE_THRESHOLD:
-                reason_parts = []
-                if posture_changed:
-                    reason_parts.append(f"posture {self._last_confirmed_posture}→{posture}")
-                if area_changed:
-                    reason_parts.append(f"area {self._last_confirmed_area}→{area}")
-                if hr_zone_changed:
-                    reason_parts.append(f"hr_zone {self._last_confirmed_hr_zone}→{hr_zone}")
-                
-                self._trigger_snapshot(data, reason=f"TRANSITION: {', '.join(reason_parts)}")
-                
-                # Confirm the new state
-                self._last_confirmed_posture = posture
-                self._last_confirmed_area = area
-                self._last_confirmed_hr_zone = hr_zone
-                self._pending_posture = None
-                self._pending_area = None
-                self._pending_since_count = 0
-                self._last_heartbeat_count = self.reading_count  # Reset heartbeat timer
-                return
-        else:
-            # State unchanged → clear any pending candidate
-            self._pending_posture = None
-            self._pending_area = None
-            self._pending_since_count = 0
-        
-        # ── TIER 3: HEARTBEAT BACKUP → Periodic alive signal ─────────────
-        since_last_heartbeat = self.reading_count - self._last_heartbeat_count
-        if since_last_heartbeat >= self._HEARTBEAT_INTERVAL:
-            self._trigger_snapshot(data, reason=f"HEARTBEAT: stable for {since_last_heartbeat} readings")
-            self._last_heartbeat_count = self.reading_count
-    
-    def _trigger_snapshot(self, data, reason=""):
-        """Send snapshot to Graphiti memory graph."""
-        print(f"\n🚀 [GRAPH-MEMORY] {reason} | {self.device_id} (count: {self.reading_count})")
-        print(f"   |- HR: {data.get('HR', 0)} | Steps: {data.get('Step', 0)} | Posture: {data.get('Posture_state', 0)}")
-        run_async(self.memory.store_sensor_snapshot(data), wait_result=False)
-        
-        # Update numerical metric history for delta comparisons
-        self._last_confirmed_hr = int(data.get('HR', 0))
-        self._last_confirmed_spo2 = int(data.get('Blood_oxygen', 0))
-
+        # Store snapshot every 10 readings for testing (previously 50)
+        # Fix trigger using absolute counter instead of length % 10
+        if is_notable or self.reading_count % 10 == 0:
+            print(f"\n🚀 [GRAPH-MEMORY] Triggering snapshot for {self.device_id} (count: {self.reading_count})")
+            print(f"   |- Steps: {data.get('Step', 0)} | Burned: {data.get('Calories_burned', 0)}")
+            run_async(self.memory.store_sensor_snapshot(data), wait_result=False)
         
     def get_recent(self, n=10):
         """Get N most recent readings"""
@@ -425,7 +314,7 @@ MODEL_PREFERENCES = {
     'analyzer':    'ollama:lfm2.5-thinking:1.2b',
     'predictor':   'ollama:lfm2.5-thinking:1.2b',
     'alert':       'ollama:lfm2.5-thinking:1.2b',
-    'coordinator': 'ollama:lfm2.5-thinking:1.2b',
+    'coordinator': CHAT_DEFAULT_MODEL,
 
 }
 
@@ -1392,115 +1281,6 @@ def force_analysis(device_id):
         )
     return jsonify({'error': 'No data available'}), 404
 
-@app.route("/api/add-context", methods=["POST"])
-def add_context():
-    """Manually add Meal, Activity, or Medical Record context into Neo4j + Graphiti"""
-    data = request.json
-    if not data:
-        return jsonify({'error': 'No JSON payload provided'}), 400
-        
-    device_id = data.get('device_id')
-    episode_type = data.get('type')
-    content = data.get('content')
-    ref_time_str = data.get('reference_time')
-    
-    if not device_id or not episode_type or not content:
-        return jsonify({'error': 'Missing required fields: device_id, type, content'}), 400
-        
-    # Get or initialize PatientMemory
-    patient_state = PATIENT_STATES.get(device_id)
-    if patient_state:
-        patient_memory = patient_state.memory
-    else:
-        from memory.patient_memory import PatientMemory
-        patient_memory = PatientMemory(device_id)
-        
-    try:
-        ref_time = datetime.fromisoformat(ref_time_str.replace('Z', '+00:00')) if ref_time_str else datetime.now()
-    except Exception as e:
-        print(f"Error parsing date {ref_time_str}: {e}")
-        ref_time = datetime.now()
-    
-    # PRIMARY: Write directly to Neo4j (instant, synchronous, no LLM lock)
-    success = patient_memory.add_manual_context_sync(
-        content=content,
-        context_type=episode_type,
-        reference_time=ref_time
-    )
-    
-    if not success:
-        return jsonify({'error': 'Failed to write context to database'}), 500
-
-    log_agent_activity(
-        "Memory Agent",
-        f"Adding {episode_type} manual context",
-        device_id,
-        "success",
-        f"Stored context at {ref_time.strftime('%Y-%m-%d %H:%M')}"
-    )
-    
-    # SECONDARY: Also attempt Graphiti enrichment in background (may fail, that's OK)
-    def background_graphiti():
-        try:
-            run_async(patient_memory.add_episode(
-                content=content,
-                episode_type=episode_type,
-                reference_time=ref_time
-            ), wait_result=False)
-        except Exception:
-            pass  # Graphiti enrichment is best-effort
-        
-    Thread(target=background_graphiti, daemon=True).start()
-    
-    return jsonify({
-        'status': 'success',
-        'message': f'Successfully saved {episode_type} to patient memory',
-        'reference_time': ref_time.isoformat()
-    }), 200
-
-@app.route("/api/manual-context/<device_id>")
-def get_manual_context(device_id):
-    """Retrieve manual context episodes for UI display"""
-    patient_state = PATIENT_STATES.get(device_id)
-    if patient_state:
-        patient_memory = patient_state.memory
-    else:
-        from memory.patient_memory import PatientMemory
-        patient_memory = PatientMemory(device_id)
-        
-    episodes = patient_memory.get_manual_episodes_sync(limit=20)
-    return app.response_class(
-        response=json.dumps(episodes, cls=DateTimeEncoder),
-        status=200,
-        mimetype='application/json'
-    )
-
-@app.route("/api/delete-context", methods=["POST"])
-def delete_context():
-    """Delete a manual context entry by its UUID"""
-    data = request.json
-    if not data:
-        return jsonify({'error': 'No JSON payload'}), 400
-    
-    device_id = data.get('device_id')
-    node_id = data.get('node_id')
-    
-    if not device_id or not node_id:
-        return jsonify({'error': 'Missing device_id or node_id'}), 400
-    
-    patient_state = PATIENT_STATES.get(device_id)
-    if patient_state:
-        patient_memory = patient_state.memory
-    else:
-        from memory.patient_memory import PatientMemory
-        patient_memory = PatientMemory(device_id)
-    
-    success = patient_memory.delete_manual_context_sync(node_id)
-    if success:
-        return jsonify({'status': 'success', 'message': 'Entry deleted'}), 200
-    else:
-        return jsonify({'error': 'Failed to delete entry'}), 500
-
 @app.route("/api/agent-activity-detail/<activity_id>")
 def get_agent_activity_detail(activity_id):
     """Get detailed information for a specific activity log"""
@@ -1519,7 +1299,6 @@ def generate_report(device_id):
     # Get parameters
     time_range = request.args.get('hours', default=24, type=int)
     format_type = request.args.get('format', default='json', type=str).lower()
-    model_arg = request.args.get('model', default='', type=str).lower()
     
     # Validate time range
     if time_range < 1 or time_range > 168:  # Max 1 week
@@ -1541,7 +1320,6 @@ def generate_report(device_id):
     # Get graphiti summary and historical raw episodes using the actual time range
     graph_context = ""
     raw_history = []
-    manual_context_entries = []
     try:
         from agentic_medicore_enhanced import run_async_readonly
         graph_context = run_async_readonly(
@@ -1552,83 +1330,36 @@ def generate_report(device_id):
         )
     except Exception as e:
         print(f"Graphiti memory fetch failed for report: {e}")
-    
-    # Fetch manual context entries (meals, activities, medical records)
-    try:
-        manual_context_entries = patient_memory.get_manual_episodes_sync(limit=100, hours_back=time_range)
-        if manual_context_entries:
-            print(f"[REPORT] Loaded {len(manual_context_entries)} manual context entries for report")
-    except Exception as e:
-        print(f"[REPORT] Manual context fetch failed: {e}")
-    
     patient_alerts = [a for a in ACTIVE_ALERTS if a.get('device_id') == device_id]
     patient_logs = [log for log in AGENT_ACTIVITY_LOG if log.get('device_id') == device_id]
-    
-    # Build manual context summary for AI prompt
-    manual_context_text = ""
-    if manual_context_entries:
-        from utils.tz_utils import utc_to_utc8
-        lines = []
-        for entry in manual_context_entries:
-            ts = utc_to_utc8(entry.get('timestamp', ''))
-            category = entry.get('name', 'unknown')
-            if category.startswith('meal'): category = 'MEAL'
-            elif category.startswith('activity'): category = 'ACTIVITY'
-            elif category.startswith('medical'): category = 'MEDICAL RECORD'
-            lines.append(f"- [{ts} UTC+8] [{category}] {entry.get('content', '')}")
-        manual_context_text = "\n".join(lines)
-        print(f"[REPORT] Manual context for prompt ({len(manual_context_entries)} entries):")
-        print(manual_context_text)
-    else:
-        print("[REPORT] WARNING: No manual context entries found! Manual logs will NOT appear in report.")
     
     # Generate an AI Narrative Summary
     ai_narrative = ""
     try:
-        if graph_context or manual_context_text:
+        if graph_context:
             from textwrap import dedent
             prompt = dedent(f"""
-            You are an expert clinical AI. Provide a compassionate, factual, and chronological 2-3 paragraph summary of the following patient data for the last {time_range} hours.
-            Highlight what the patient was doing throughout the day (morning, afternoon, night trends), their average heart rate, primary locations/behaviors, AND any manually logged meals, activities, or medical records.
-            When manual context is available, integrate it naturally into the narrative (e.g., "The patient reported eating nasi goreng at midnight with approximately 600 kcal" or "The patient logged going to sleep at 4:23 PM").
+            You are an expert clinical AI. Provide a compassionate, factual, and chronological 2-3 paragraph summary of the following Graphiti patient activity data for the last {time_range} hours.
+            Highlight what the patient was doing throughout the day (morning, afternoon, night trends), their average heart rate, and primary locations/behaviors. 
             Do NOT hallucinate or guess. Use ONLY the data provided below. Format nicely with bold text where appropriate.
 
-            SENSOR DATA SUMMARY:
-            {graph_context or 'No sensor activity summary available.'}
-
-            MANUAL PATIENT LOGS (Meals, Activities, Medical Records):
-            {manual_context_text or 'No manual logs recorded by patient/staff.'}
+            DATA SUMMARY:
+            {graph_context}
             """).strip()
-            print(f"[REPORT] AI prompt length: {len(prompt)} chars | has_graph={bool(graph_context)} | has_manual={bool(manual_context_text)}")
             
-            import os
-            openai_key = os.getenv("OPENAI_API_KEY")
-            
-            # Gunakan penarik Model dari dropdown
-            if model_arg == "openai:gpt-4o-mini" or (not model_arg and openai_key and openai_key != "YOUR_OPENAI_API_KEY_HERE"):
-                print("[REPORT] Using Direct OpenAI GPT-4o Mini for report narrative")
-                import openai
-                client = openai.OpenAI(api_key=openai_key)
-                resp = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.3
-                )
+            chat_model = MODEL_PREFERENCES.get('coordinator', AgentConfig.COORDINATOR_AGENT)
+            if chat_model.startswith('ollamacloud:'):
+                model_name = chat_model.split('ollamacloud:')[1]
+                resp = call_ollama_cloud(model_name, [{"role": "user", "content": prompt}], temperature=0.3)
                 ai_narrative = resp.choices[0].message.content
             else:
-                chat_model = model_arg if model_arg else MODEL_PREFERENCES.get('coordinator', 'ollama:lfm2.5-thinking:1.2b')
-                if chat_model.startswith('ollamacloud:'):
-                    model_name = chat_model.split('ollamacloud:')[1]
-                    resp = call_ollama_cloud(model_name, [{"role": "user", "content": prompt}], temperature=0.3)
-                    ai_narrative = resp.choices[0].message.content
-                else:
-                    from ollama import AsyncClient
-                    client = AsyncClient(host=AgentConfig.OLLAMA_HOST)
-                    resp = run_async_readonly(
-                        client.chat(model=chat_model, messages=[{"role": "user", "content": prompt}], stream=False),
-                        timeout=30
-                    )
-                    ai_narrative = resp['message']['content']
+                from ollama import AsyncClient
+                client = AsyncClient(host=AgentConfig.OLLAMA_HOST)
+                resp = run_async_readonly(
+                    client.chat(model=chat_model, messages=[{"role": "user", "content": prompt}], stream=False),
+                    timeout=30
+                )
+                ai_narrative = resp['message']['content']
     except Exception as e:
         print(f"AI narrative generation failed: {e}")
     
@@ -1641,13 +1372,8 @@ def generate_report(device_id):
             time_range_hours=time_range,
             graph_memory_summary=graph_context or "No semantic AI data derived from Neo4j/Graphiti.",
             ai_narrative=ai_narrative or "No AI narrative could be generated at this time.",
-            extra_data=raw_history,
-            manual_context=manual_context_entries
+            extra_data=raw_history
         )
-        
-        # Attach manual context entries to report data for HTML rendering
-        if manual_context_entries:
-            report_data['manual_context'] = manual_context_entries
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
@@ -2384,19 +2110,10 @@ def generate_multi_period_report():
         'monthly': {'hours': 720, 'label': 'Monthly', 'folder': 'monthly'}
     }
     
-    # Support custom hour ranges (e.g. 1h, 3h, 6h, 12h)
-    if period == 'custom':
-        custom_hours = data.get('hours', 3)
-        if custom_hours < 1 or custom_hours > 168:
-            return jsonify({"error": "Custom hours must be between 1 and 168"}), 400
-        config = {'hours': custom_hours, 'label': f'Custom ({custom_hours}h)', 'folder': 'custom'}
-        # Ensure custom folder exists
-        os.makedirs(os.path.join('reports', 'custom'), exist_ok=True)
-    elif period not in period_config:
+    if period not in period_config:
         return jsonify({"error": "Invalid period"}), 400
-    else:
-        config = period_config[period]
     
+    config = period_config[period]
     time_range_hours = config['hours']
     
     # Get Graphiti memory summary
@@ -2409,46 +2126,10 @@ def generate_multi_period_report():
         print(f"[REPORT] Graphiti error: {e}")
         graphiti_summary = "Memory summary unavailable."
     
-    # Fetch manual context entries (meals, activities, medical records)
-    manual_context_entries = []
-    try:
-        manual_context_entries = patient_state.memory.get_manual_episodes_sync(limit=50)
-        if manual_context_entries:
-            from utils.tz_utils import utc_to_utc8
-            print(f"[REPORT] Loaded {len(manual_context_entries)} manual context entries for report")
-            for entry in manual_context_entries:
-                ts = utc_to_utc8(entry.get('timestamp', ''))
-                cat = entry.get('name', 'unknown')
-                if cat.startswith('meal'): cat = 'MEAL'
-                elif cat.startswith('activity'): cat = 'ACTIVITY'
-                elif cat.startswith('medical'): cat = 'MEDICAL RECORD'
-                print(f"  → [{ts} UTC+8] [{cat}] {entry.get('content', '')[:60]}")
-        else:
-            print("[REPORT] WARNING: No manual context entries found for this patient.")
-    except Exception as e:
-        print(f"[REPORT] Manual context fetch failed: {e}")
-
     # Define model caller for Lite Agent (multi-step AI reasoning)
     def model_caller(prompt):
-        import os
-        openai_key = os.getenv("OPENAI_API_KEY")
-        override_model = data.get('model', '')
-        if override_model == "openai:gpt-4o-mini" or (not override_model and openai_key and openai_key != "YOUR_OPENAI_API_KEY_HERE"):
-            print("[LITE AGENT] Using Direct OpenAI GPT-4o Mini for deep analysis")
-            import openai
-            client = openai.OpenAI(api_key=openai_key)
-            try:
-                resp = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.3
-                )
-                return resp.choices[0].message.content
-            except Exception as e:
-                print(f"[LITE AGENT] Direct OpenAI failed: {e}. Falling back to standard pipeline...")
-
         # Always prefer high-end cloud models for reports if available
-        chat_model = override_model if override_model else MODEL_PREFERENCES.get('coordinator', 'ollama:lfm2.5-thinking:1.2b')
+        chat_model = MODEL_PREFERENCES.get('coordinator', AgentConfig.COORDINATOR_AGENT)
         
         if OLLAMA_CLOUD_API_KEY:
             # Only try confirmed working cloud models for reports
@@ -2489,13 +2170,8 @@ def generate_multi_period_report():
         time_range_hours=time_range_hours,
         graph_memory_summary=graphiti_summary,
         ai_narrative="",  # Will be auto-generated by Lite Agent or CrewAI
-        model_caller=model_caller,
-        manual_context=manual_context_entries
+        model_caller=model_caller
     )
-    
-    # Attach manual context to report data for HTML rendering
-    if manual_context_entries:
-        report_data['manual_context'] = manual_context_entries
     
     if output_format == 'json':
         return jsonify(report_data)

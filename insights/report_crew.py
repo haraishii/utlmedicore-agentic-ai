@@ -27,16 +27,25 @@ class ReportNarrativeCrew:
                           vital_signs: dict,
                           activities: dict,
                           locations: dict,
+                          nutrition: dict,
                           alerts: dict,
                           risk_score: float,
                           graphiti_summary: str,
-                          time_range_hours: int) -> str:
-        """
-        Generate AI narrative for patient report
-        
-        Returns: Professional markdown narrative
-        """
-        
+                          time_range_hours: int,
+                          manual_context: list = None) -> str:
+        # Format manual context for agents
+        manual_context_text = "No manual logs recorded."
+        if manual_context:
+            lines = []
+            for entry in manual_context:
+                ts = entry.get('timestamp', '')[:16].replace('T', ' ')
+                cat = entry.get('name', 'unknown')
+                if cat.startswith('meal'): cat = 'MEAL'
+                elif cat.startswith('activity'): cat = 'ACTIVITY'
+                elif cat.startswith('medical'): cat = 'MEDICAL RECORD'
+                lines.append(f"- [{ts}] [{cat}] {entry.get('content', '')}")
+            manual_context_text = "\n".join(lines)
+
         # Create specialized agents
         data_analyst = Agent(
             role='Healthcare Data Analyst',
@@ -71,6 +80,9 @@ ACTIVITIES:
 LOCATIONS:
 {json.dumps(locations, indent=2)}
 
+NUTRITION:
+{json.dumps(nutrition, indent=2)}
+
 ALERTS:
 Total: {alerts.get('total_alerts', 0)}
 Critical: {len(alerts.get('critical_alerts', []))}
@@ -78,21 +90,24 @@ Warnings: {len(alerts.get('warning_alerts', []))}
 
 MEMORY INSIGHTS:
 {graphiti_summary}
+
+MANUAL PATIENT LOGS (Meals, Activities):
+{manual_context_text}
 """
         
         # Task 1: Analyze the data
         analysis_task = Task(
             description=f'''
-Analyze this patient's health data and identify:
-1. Overall health status
-2. Key patterns or trends
-3. Areas of concern
-4. Positive findings
+Analyze this patient's health data and manual logs to identify:
+1. Overall clinical status summary.
+2. Meal/Activity Analysis: Assess how manually logged meals correlate with heart rate or vitals.
+3. Behavioral Trends: Do sensor postures match manual sleep/wake reports?
+4. Risk Anomalies: Point out any spikes near meals or locations.
 
 Data:
 {data_summary}
 
-Provide a structured analysis covering all aspects.
+Provide a structured analysis covering all correlations.
 ''',
             agent=data_analyst,
             expected_output='Structured health analysis with key findings'

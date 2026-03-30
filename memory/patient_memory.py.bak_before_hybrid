@@ -145,62 +145,56 @@ def run_async_readonly(coro, timeout=15):
         return None
 
 
-_patient_instances = {}
-
 # ---------------------------------------------------------------------------
 # PATIENT MEMORY CLASS
 # ---------------------------------------------------------------------------
 class PatientMemory:
-    def __new__(cls, device_id: str):
-        if device_id not in _patient_instances:
-            _patient_instances[device_id] = super(PatientMemory, cls).__new__(cls)
-        return _patient_instances[device_id]
+    """
+    Persistent graph-based memory for a single patient device.
+
+    All data is scoped by group_id so each patient has completely
+    isolated memory. Patient A's history never contaminates Patient B.
+
+    Example usage:
+        mem = PatientMemory("DCA632971FC3")
+
+        # Store a notable event
+        await mem.add_episode(
+            "Patient's HR spiked to 125 after lunch. Non-critical — known pattern.",
+            episode_type="baseline"
+        )
+
+        # Query before making a monitoring decision
+        ctx = await mem.get_patient_context("Is HR 125 dangerous for this patient?")
+        # Returns: "Patient Memory Context:\n- Patient HR 125 after lunch is normal..."
+    """
 
     def __init__(self, device_id: str):
-        if getattr(self, '_initialized', False):
-            return
         self.device_id = device_id
         # group_id scopes all episodes to this specific patient
         self.group_id = f"patient_{device_id}"
-        self._hr_zero_count = 0  # Debouncer untuk bacaan HR: 0 berturut-turut
-        self._initialized = True
 
-    async def add_episode(self, content: str, episode_type: str = "observation", reference_time: Optional[datetime] = None) -> None:
+    async def add_episode(self, content: str, episode_type: str = "observation") -> None:
         """
         Store an event as a natural-language episode in the memory graph.
 
         Args:
-            content        : Descriptive text. Be specific — include vitals, location,
-                             time context. Graphiti extracts entities from this text.
-            episode_type   : Category tag (observation, alert, baseline, meal, sleep, etc.)
-            reference_time : Optional timestamp. If not passed, defaults to datetime.now()
+            content      : Descriptive text. Be specific — include vitals, location,
+                           time context. Graphiti extracts entities from this text.
+            episode_type : Category tag (observation, alert, baseline, meal, sleep, etc.)
         """
         graphiti = await get_graphiti()
-        
-        ref_dt = reference_time if reference_time else datetime.now()
-        episode_name = f"{episode_type}_{ref_dt.strftime('%Y%m%d_%H%M%S')}"
 
-        import time as _time
-        import asyncio as _asyncio
-        _t0 = _time.time()
-        print(f"[Memory] [WAIT] Sending episode [{episode_type}] to local model... {content[:50]}")
+        episode_name = f"{episode_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-        try:
-            await _asyncio.wait_for(
-                graphiti.add_episode(
-                    name=episode_name,
-                    episode_body=content,
-                    source_description=f"UTLMediCore sensor stream — Device {self.device_id}",
-                    group_id=self.group_id,
-                    reference_time=ref_dt,
-                ),
-                timeout=90.0   # 90 detik max — jika llama8B stuck, skip episode ini
-            )
-            _elapsed = _time.time() - _t0
-            print(f"[Memory] [OK] Episode stored in {_elapsed:.1f}s [{episode_type}] for {self.device_id}")
-        except _asyncio.TimeoutError:
-            _elapsed = _time.time() - _t0
-            print(f"[Memory] [WARN] Episode TIMEOUT after {_elapsed:.0f}s [{episode_type}] — skipping, lanjut episode berikutnya")
+        await graphiti.add_episode(
+            name=episode_name,
+            episode_body=content,
+            source_description=f"UTLMediCore sensor stream — Device {self.device_id}",
+            group_id=self.group_id,
+            reference_time=datetime.now(), # Will now be treated as the 'local' marker
+        )
+        print(f"[Memory] Stored [{episode_type}] for {self.device_id}: {content[:60]}...")
 
     async def get_patient_context(self, query: str, limit: int = 10) -> str:
         """
@@ -236,7 +230,7 @@ class PatientMemory:
         except Exception as e:
             print(f"[Memory Tier-1] graphiti.search() failed: {e}")
 
-        # ── Tier 2: Direct Neo4j backup (Reads Episodic + VitalReading to reveal Direct Writes) ──
+        # ── Tier 2: Direct Neo4j episode text query (always available) ───────
         try:
             import os
             from neo4j import AsyncGraphDatabase
@@ -248,37 +242,21 @@ class PatientMemory:
             driver = AsyncGraphDatabase.driver(uri, auth=(user, pw))
             episodes = []
             async with driver.session() as s:
-                # ── UNION ALl: Fetch LLM Episodic nodes + Direct Write nodes ────────
-                result = await s.run(
+                # Get latest 10 episodes, sorted newest-first to see latest calories
+                r = await s.run(
                     """
-                    // 1. Traditional Graphiti LLM episodes
                     MATCH (e:Episodic)
                     WHERE e.group_id = $gid
-                    RETURN e.content AS content, datetime(e.created_at) AS ts
-                    
-                    UNION ALL
-                    
-                    // 2. New Direct Real-time Vital Readings
-                    MATCH (p:Patient {device_id: $dev_id})-[:HAD_READING]->(v:VitalReading)
-                    RETURN "Real-time reading — HR: " + toString(v.hr) + " | SpO2: " + toString(v.spo2) + 
-                           "% | Posture: " + v.posture_label + " (" + v.condition + ")" AS content, 
-                           datetime(v.timestamp_utc) AS ts
-                    
-                    UNION ALL
-                    
-                    // 3. New Direct Alert Events
-                    MATCH (p:Patient {device_id: $dev_id})-[:HAD_ALERT]->(a:AlertEvent)
-                    RETURN "⚠️ ALERT — " + a.alert_type + " [" + a.severity + "]: " + a.message AS content, 
-                           datetime(a.timestamp_utc) AS ts
-
-                    ORDER BY ts DESC
+                    RETURN e.name AS name,
+                           e.content AS content,
+                           datetime(e.created_at) AS ts
+                    ORDER BY e.created_at DESC
                     LIMIT $lim
                     """,
-                    gid    = self.group_id,
-                    dev_id = self.device_id,
-                    lim    = limit,
+                    gid=self.group_id,
+                    lim=10, # Always look at the last 10 snapshots
                 )
-                async for rec in result:
+                async for rec in r:
                     content = (rec["content"] or "").strip()
                     ts = str(rec["ts"] or "")[:16]
                     if content:
@@ -288,10 +266,11 @@ class PatientMemory:
 
             if episodes:
                 context = (
-                    f"Patient Episode & Real-time History — {len(episodes)} recent records:\n"
+                    f"Patient Episode History — {len(episodes)} recent records "
+                    f"(direct from Neo4j, entity extraction still processing):\n"
                     + "\n\n".join(episodes)
                 )
-                print(f"[Memory Tier-2] {len(episodes)} records read for {self.device_id} (Hybrid Model)")
+                print(f"[Memory Tier-2] {len(episodes)} episodes read directly for {self.device_id}")
                 return context
 
         except Exception as e:
@@ -363,203 +342,6 @@ class PatientMemory:
             print(f"[Memory Tier-2] Neo4j direct failed: {e}")
         return ""
 
-    def add_manual_context_sync(self, content: str, context_type: str, reference_time=None) -> bool:
-        """
-        Write manual context DIRECTLY to Neo4j as a ManualContext node.
-        SYNCHRONOUS — no async, no LLM lock, instant and reliable.
-        """
-        import os, uuid as _uuid
-        from neo4j import GraphDatabase
-        from datetime import datetime as _dt
-
-        uri  = os.getenv("NEO4J_URI",      "bolt://localhost:7687")
-        user = os.getenv("NEO4J_USER",     "neo4j")
-        pw   = os.getenv("NEO4J_PASSWORD", "password")
-
-        ref_dt = reference_time if reference_time else _dt.now()
-        # Ensure ref_time is an ISO string for Neo4j datetime()
-        if isinstance(ref_dt, str):
-            ref_time_str = ref_dt
-        else:
-            ref_time_str = ref_dt.isoformat()
-
-        try:
-            driver = GraphDatabase.driver(uri, auth=(user, pw))
-            with driver.session() as s:
-                s.run(
-                    """
-                    MERGE (p:Patient {device_id: $dev_id})
-                    CREATE (m:ManualContext {
-                        uuid: $uuid,
-                        device_id: $dev_id,
-                        group_id: $gid,
-                        context_type: $ctype,
-                        content: $content,
-                        reference_time: datetime($ref_time),
-                        created_at: datetime()
-                    })
-                    CREATE (p)-[:HAS_CONTEXT]->(m)
-                    """,
-                    uuid=str(_uuid.uuid4()),
-                    dev_id=self.device_id,
-                    gid=self.group_id,
-                    ctype=context_type,
-                    content=content,
-                    ref_time=ref_time_str
-                )
-            driver.close()
-            print(f"[Memory] [OK] ManualContext saved: [{context_type}] for {self.device_id}")
-            return True
-        except Exception as e:
-            print(f"[Memory] [ERR] ManualContext write failed: {e}")
-            return False
-
-    def delete_manual_context_sync(self, node_id: str) -> bool:
-        """Delete a ManualContext node by uuid or elementId. SYNCHRONOUS."""
-        import os
-        from neo4j import GraphDatabase
-
-        uri  = os.getenv("NEO4J_URI",      "bolt://localhost:7687")
-        user = os.getenv("NEO4J_USER",     "neo4j")
-        pw   = os.getenv("NEO4J_PASSWORD", "password")
-
-        try:
-            driver = GraphDatabase.driver(uri, auth=(user, pw))
-            with driver.session() as s:
-                # Try uuid first
-                result = s.run(
-                    """
-                    MATCH (m:ManualContext {uuid: $uuid, device_id: $dev_id})
-                    DETACH DELETE m
-                    RETURN count(*) AS deleted
-                    """,
-                    uuid=node_id,
-                    dev_id=self.device_id
-                )
-                rec = result.single()
-                deleted = rec["deleted"] if rec else 0
-
-                # Fallback: try elementId
-                if deleted == 0:
-                    s.run(
-                        """
-                        MATCH (m:ManualContext)
-                        WHERE elementId(m) = $eid AND m.device_id = $dev_id
-                        DETACH DELETE m
-                        """,
-                        eid=node_id,
-                        dev_id=self.device_id
-                    )
-            driver.close()
-            print(f"[Memory] [OK] ManualContext deleted: {node_id}")
-            return True
-        except Exception as e:
-            print(f"[Memory] [ERR] Delete ManualContext failed: {e}")
-            return False
-
-    def get_manual_episodes_sync(self, limit: int = 50, hours_back: int = None) -> list:
-        """Fetch manual context entries from Neo4j. SYNCHRONOUS — no lock contention.
-        Returns deduplicated entries with proper UTC timestamps.
-        If hours_back is provided, only fetches entries from the last N hours."""
-        import os
-        from neo4j import GraphDatabase
-        
-        uri  = os.getenv("NEO4J_URI",      "bolt://localhost:7687")
-        user = os.getenv("NEO4J_USER",     "neo4j")
-        pw   = os.getenv("NEO4J_PASSWORD", "password")
-
-        episodes = []
-        seen_content = set()  # For deduplication
-        try:
-            driver = GraphDatabase.driver(uri, auth=(user, pw))
-            
-            # Buat filter waktu jika ada
-            time_filter = ""
-            dur_str = ""
-            if hours_back:
-                time_filter = "AND coalesce(m.reference_time, m.created_at) >= datetime() - duration($dur_hr)"
-                dur_str = f"PT{hours_back}H"
-
-            with driver.session() as s:
-                # ManualContext nodes (direct writes) — PRIMARY source
-                query = f"""
-                    MATCH (m:ManualContext {{device_id: $dev_id}})
-                    WHERE 1=1 {time_filter}
-                    RETURN coalesce(m.uuid, elementId(m)) AS id,
-                           m.context_type AS name, m.content AS content,
-                           m.reference_time AS ts, m.created_at AS created_at
-                    ORDER BY m.reference_time DESC
-                    LIMIT $lim
-                """
-                
-                result = s.run(
-                    query,
-                    dev_id=self.device_id,
-                    lim=limit,
-                    dur_hr=dur_str
-                )
-                for rec in result:
-                    content = rec["content"]
-                    content_key = content.strip().lower()
-                    seen_content.add(content_key)
-                    
-                    ts = rec["ts"] or rec["created_at"]
-                    ts_iso = str(ts).replace(" ", "T")
-                    # Ensure UTC suffix if no timezone info
-                    if "+" not in ts_iso and "Z" not in ts_iso:
-                        ts_iso = ts_iso + "Z"
-                    
-                    episodes.append({
-                        "id": rec["id"] or "",
-                        "name": rec["name"],
-                        "content": content,
-                        "timestamp": ts_iso,
-                        "source": "manual"
-                    })
-
-                # Legacy Episodic nodes — only add if NOT already in ManualContext
-                if len(episodes) < limit:
-                    result2 = s.run(
-                        """
-                        MATCH (e:Episodic)
-                        WHERE e.group_id = $gid
-                          AND (e.name STARTS WITH 'meal' OR e.name STARTS WITH 'activity' OR e.name STARTS WITH 'medical_record')
-                        RETURN coalesce(e.uuid, elementId(e)) AS id,
-                               e.name AS name, e.content AS content,
-                               e.valid_at AS ts, e.created_at AS created_at
-                        ORDER BY ts DESC
-                        LIMIT $lim
-                        """,
-                        gid=self.group_id,
-                        lim=limit - len(episodes)
-                    )
-                    for rec in result2:
-                        content = rec["content"]
-                        content_key = content.strip().lower()
-                        # Skip duplicates — same content already in ManualContext
-                        if content_key in seen_content:
-                            continue
-                        seen_content.add(content_key)
-                        
-                        ts = rec["ts"] or rec["created_at"]
-                        ts_iso = str(ts).replace(" ", "T")
-                        if "+" not in ts_iso and "Z" not in ts_iso:
-                            ts_iso = ts_iso + "Z"
-                        
-                        episodes.append({
-                            "id": rec["id"] or "",
-                            "name": rec["name"],
-                            "content": content,
-                            "timestamp": ts_iso,
-                            "source": "graphiti"
-                        })
-
-            driver.close()
-            return episodes
-        except Exception as e:
-            print(f"[Memory] get_manual_episodes failed: {e}")
-            return []
-
     async def get_activity_summary(self, hours_back: int = 24) -> str:
         """
         Compute DURATION-BASED activity statistics from Neo4j episode timestamps.
@@ -584,37 +366,12 @@ class PatientMemory:
             episodes = []
             dur_start = f'PT{hours_back}H'
             
-            from datetime import datetime, timezone
+            # If hours_back>24 but not 168 (e.g. 48 for Yesterday+Today), we just query from "now - 48h" and include everything 
+            # until "now". If we only wanted yesterday, we'd do dur_end='PT24H'. 
+            # In reports, 48 hours is usually the full 48h.
             dur_end = 'PT0H'
 
-            # ── fallback query untuk 1 node terakhir sebelum start_time ──
-            prev_posture = "Unknown"
-            prev_area = "Unknown"
-            # Get start date anchor
-            start_dt = datetime.now() - timedelta(hours=hours_back)
-
             async with driver.session() as s:
-                # 1. Cari kondisi terakhir SEBELUM range waktu start
-                prev_r = await s.run(
-                    """
-                    MATCH (e:Episodic)
-                    WHERE e.group_id = $gid
-                      AND e.created_at < datetime() - duration($dur_start)
-                    RETURN e.content AS content
-                    ORDER BY e.created_at DESC
-                    LIMIT 1
-                    """,
-                    gid=self.group_id,
-                    dur_start=dur_start
-                )
-                async for p_rec in prev_r:
-                     p_content = (p_rec["content"] or "").strip()
-                     for line in p_content.split("."):
-                         l = line.strip()
-                         if "Activity/Posture:" in l: prev_posture = l.split("Activity/Posture:")[-1].strip()
-                         elif "Location:" in l: prev_area = l.split("Location:")[-1].strip()
-
-                # 2. Main query
                 r = await s.run(
                     """
                     MATCH (e:Episodic)
@@ -661,19 +418,9 @@ class PatientMemory:
             if not episodes:
                 return ""
 
-            # ── Compute duration per posture ──
-            posture_durations: dict[str, float] = {}  
-            area_durations:    dict[str, float] = {}
-            step_records = []
-
-            # Tambahkan interpolasi dari START BOUNDS ke Elemen Pertama
-            if episodes[0]["ts"]:
-                gap_start_min = (episodes[0]["ts"] - start_dt).total_seconds() / 60
-                if 0 < gap_start_min <= 600:
-                    posture_durations[prev_posture] = gap_start_min
-                    area_durations[prev_area] = gap_start_min
-
             # ── Compute duration per posture (group consecutive same-posture) ──
+            posture_durations: dict[str, float] = {}  # posture → total minutes
+            area_durations:    dict[str, float] = {}
             step_records = []
 
             for i in range(len(episodes) - 1):
@@ -681,8 +428,8 @@ class PatientMemory:
                 nxt  = episodes[i + 1]
                 if ep["ts"] and nxt["ts"]:
                     delta_min = (nxt["ts"] - ep["ts"]).total_seconds() / 60
-                    # Only count reasonable intervals (1s to 10h) to avoid gaps overlaying
-                    if 0 < delta_min <= 600:
+                    # Only count reasonable intervals (1s to 2h) to avoid gaps overnight
+                    if 0 < delta_min <= 120:
                         p = ep["posture"]
                         a = ep["area"]
                         posture_durations[p] = posture_durations.get(p, 0) + delta_min
@@ -970,41 +717,24 @@ class PatientMemory:
 
         posture_txt = posture_map.get(posture_val, "Unknown")
         
-        # ── DISCONNECTED DEBOUNCER ─────────────────────────────────────────
-        # Jika HR = 0 berturut-turut >= 2 kali baru dianggap dilepas
+        # ── DISCONNECTED OVERRIDE ─────────────────────────────────────────
+        # If Heart Rate is 0, usually wearable is taken off. 
+        # Accelerator static gravity values shouldn't be interpreted as real posture.
         if hr == 0:
-            self._hr_zero_count = getattr(self, '_hr_zero_count', 0) + 1
-            if self._hr_zero_count >= 2:
-                posture_txt = "Device Taken Off"
-        else:
-            self._hr_zero_count = 0
+            posture_txt = "Device Taken Off"
             
         area_txt = area_map.get(area_val, "Unknown Area")
-        raw_dt = data.get('DateTime', data.get('timestamp'))
         now = datetime.now()
-
-        if raw_dt:
-            try:
-                if isinstance(raw_dt, str):
-                    # Biasanya formatnya 'YYYY-MM-DD HH:MM:SS' atau ISO8601
-                    ts_str = raw_dt.replace("T", " ").split(".")[0]
-                    now = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-                elif hasattr(raw_dt, 'timestamp'): # datetime object (MongoDB)
-                    now = raw_dt
-            except Exception as _e:
-                pass # Tetap pakai datetime.now() jika parser gagal
-
         timestamp_full = now.strftime("%H:%M on %A, %d %B %Y")
         timestamp_short = now.strftime("%Y-%m-%d %H:%M")
- 
+
         # Decide episode type
         is_fall = posture_val == 5
         is_abnormal_hr = hr > 0 and (hr > 110 or hr < 45)
         is_low_oxygen = 0 < spo2 < 90
         is_tachycardia = hr > 100
-        is_bradycardia = 0 < hr < 50  # Dibawah 50 tapi bukan 0 (glitch)
+        is_bradycardia = hr < 50
         is_high_burn = burned > calories and burned > 2000
-        is_device_off = hr == 0 and getattr(self, '_hr_zero_count', 0) >= 2
 
         if is_fall:
             episode_type = "critical_fall"
@@ -1086,13 +816,10 @@ class PatientMemory:
         elif posture_val == 8:  # Walking
             posture_risk = " (active movement)"
 
-        # Clean up ID for LLM tokenizer (Special characters like '_' can confuse smaller 8b models during edge generation)
-        clean_id = self.device_id.replace("_", "-")
-
         # Build rich, entity-dense episode text
         episode_text = (
             f"[{severity_label}] "
-            f"Patient {clean_id} monitoring record at {timestamp_full} ({timestamp_short}). "
+            f"Patient {self.device_id} monitoring record at {timestamp_full} ({timestamp_short}). "
             f"Time of day: {time_context}. "
             f"Location: {area_txt}. "
             f"Activity/Posture: {posture_txt}{posture_risk}. "
@@ -1105,101 +832,38 @@ class PatientMemory:
         # Add clinical summary sentence for better entity extraction
         if is_fall:
             episode_text += (
-                f"Patient {clean_id} experienced a fall event at {area_txt}. "
+                f"Patient {self.device_id} experienced a fall event at {area_txt}. "
                 f"Immediate assessment required. "
                 f"Heart Rate at time of fall was {hr} bpm, SpO2 was {spo2}%."
             )
         elif is_low_oxygen and is_abnormal_hr:
             episode_text += (
-                f"Patient {clean_id} showed simultaneous respiratory and cardiac distress "
+                f"Patient {self.device_id} showed simultaneous respiratory and cardiac distress "
                 f"in {area_txt}. HR {hr} bpm and SpO2 {spo2}% both outside safe ranges."
             )
         elif is_low_oxygen:
             episode_text += (
-                f"Patient {clean_id} had low blood oxygen of {spo2}% "
+                f"Patient {self.device_id} had low blood oxygen of {spo2}% "
                 f"while {posture_txt.lower()} in {area_txt}. Monitor breathing closely."
             )
         elif is_tachycardia:
             episode_text += (
-                f"Patient {clean_id} had elevated heart rate ({hr} bpm) "
+                f"Patient {self.device_id} had elevated heart rate ({hr} bpm) "
                 f"while {posture_txt.lower()} in {area_txt}. "
                 f"SpO2 remained {spo2}%. May indicate exertion, stress, or cardiac event."
             )
         elif is_bradycardia:
             episode_text += (
-                f"Patient {clean_id} had unusually low heart rate ({hr} bpm) "
+                f"Patient {self.device_id} had unusually low heart rate ({hr} bpm) "
                 f"while {posture_txt.lower()} in {area_txt}."
             )
         else:
             episode_text += (
-                f"Patient {clean_id} was {posture_txt.lower()} in {area_txt} "
+                f"Patient {self.device_id} was {posture_txt.lower()} in {area_txt} "
                 f"with stable vitals. HR {hr} bpm and SpO2 {spo2}% within normal range."
             )
 
-
-        # ══════════════════════════════════════════════════════════════════
-        # LAYER 1: DIRECT NEO4J WRITE — Instant (< 1 second), no LLM
-        # ══════════════════════════════════════════════════════════════════
-        try:
-            from memory.direct_neo4j_writer import write_vital_reading, write_alert_event
-            from datetime import timezone
-            write_vital_reading(
-                device_id = self.device_id,
-                data = {
-                    "hr":           hr,
-                    "spo2":         spo2,
-                    "steps":        steps,
-                    "posture":      posture_val,
-                    "posture_label": posture_txt,
-                    "area_label":   area_txt,
-                    "kcal":         burned,
-                    "condition":    episode_type,
-                    "timestamp_local": timestamp_short,
-                    "timestamp_utc": now.astimezone(timezone.utc).isoformat(),
-                }
-            )
-            # Also log alert events as dedicated graph nodes
-            if episode_type not in ("routine_observation",):
-                write_alert_event(
-                    device_id  = self.device_id,
-                    alert_type = episode_type,
-                    severity   = "critical" if "critical" in episode_type else "warning",
-                    message    = severity_label,
-                )
-        except Exception as _dw_err:
-            print(f"[DirectNeo4j] Layer-1 write error: {_dw_err}")
-
-        # ══════════════════════════════════════════════════════════════════
-        # LAYER 2: GRAPHITI LLM EPISODE — Rich entity extraction (async)
-        #   • Critical/alert events  → ALWAYS sent to Graphiti (important memory)
-        #   • Posture Transitions   → ALWAYS sent (landmark event to avoid blind spots)
-        #   • Routine observations   → THROTTLED to 1x per hour (saves LLM load)
-        # ══════════════════════════════════════════════════════════════════
-        # Track posture change landmarks
-        _last_posture_attr = "_last_graphiti_posture_txt"
-        _last_posture = getattr(self, _last_posture_attr, None)
-        _is_posture_changed = _last_posture is not None and _last_posture != posture_txt
-
-        _now_ts = datetime.now()
-        _is_critical = episode_type not in ("routine_observation",)
-        _last_routine_attr = "_last_graphiti_routine_ts"
-        _last_routine = getattr(self, _last_routine_attr, None)
-
-        _should_send_graphiti = _is_critical or _is_posture_changed or (
-            _last_routine is None or
-            (_now_ts - _last_routine).total_seconds() >= 3600  # 1 jam
-        )
-
-        if _should_send_graphiti:
-            # Update posture landmark anchor
-            setattr(self, _last_posture_attr, posture_txt)
-            if not _is_critical and not _is_posture_changed:
-                setattr(self, _last_routine_attr, _now_ts)
-            await self.add_episode(episode_text, episode_type=episode_type)
-        else:
-            _mins_ago = int((_now_ts - _last_routine).total_seconds() // 60)
-            print(f"[Memory] ⏩ Routine episode throttled — Graphiti updated {_mins_ago}m ago, next in {60 - _mins_ago}m")
-
+        await self.add_episode(episode_text, episode_type=episode_type)
 
 
     async def store_baseline(self, description: str) -> None:

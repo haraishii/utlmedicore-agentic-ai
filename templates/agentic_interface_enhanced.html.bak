@@ -1,0 +1,3366 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UTLMediCore Agentic AI | Enhanced Monitoring</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;800&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #050507;
+      --bg-panel: rgba(20, 25, 35, 0.85);
+      --glass-border: rgba(255, 255, 255, 0.08);
+
+      --primary: #00f2ff;
+      --secondary: #7000ff;
+      --success: #00ff9d;
+      --warning: #ffb800;
+      --danger: #ff0055;
+      --agent-active: #00ff9d;
+      --agent-idle: #8b9bb4;
+
+      --text-main: #ffffff;
+      --text-muted: #8b9bb4;
+
+      --font-ui: 'Inter', sans-serif;
+      --font-code: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image:
+        radial-gradient(circle at 15% 50%, rgba(112, 0, 255, 0.08), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(0, 242, 255, 0.08), transparent 25%);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* MAIN GRID LAYOUT */
+    .app-grid {
+      display: grid;
+      grid-template-areas:
+        "header header header"
+        "agents main alerts"
+        "agents main alerts";
+      grid-template-columns: 320px 1fr 380px;
+      grid-template-rows: 70px 1fr;
+      height: 100vh;
+      gap: 0;
+    }
+
+    /* HEADER */
+    .header {
+      grid-area: header;
+      background: var(--bg-panel);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+      padding: 0 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 20px;
+      color: var(--primary);
+      text-shadow: 0 0 10px rgba(0, 242, 255, 0.4);
+    }
+
+    .brand-tag {
+      background: var(--secondary);
+      color: white;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .system-status {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .status-dot.active {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    /* AGENTS PANEL (LEFT) */
+    .agents-panel {
+      grid-area: agents;
+      background: var(--bg-panel);
+      backdrop-filter: blur(20px);
+      border-right: 1px solid var(--glass-border);
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .panel-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 15px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 10px;
+    }
+
+    .model-selector-toggle {
+      background: rgba(0, 242, 255, 0.1);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-height: 28px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .model-selector-toggle:hover {
+      background: var(--primary);
+      color: var(--bg-dark);
+      transform: scale(1.02);
+    }
+
+    .agent-card {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 12px;
+      transition: all 0.3s;
+    }
+
+    .agent-card.active {
+      border-color: var(--agent-active);
+      background: rgba(0, 255, 157, 0.05);
+    }
+
+    .agent-card.processing {
+      border-color: var(--warning);
+      animation: glow-warning 1s infinite;
+    }
+
+    @keyframes glow-warning {
+
+      0%,
+      100% {
+        box-shadow: 0 0 10px rgba(255, 184, 0, 0.3);
+      }
+
+      50% {
+        box-shadow: 0 0 20px rgba(255, 184, 0, 0.6);
+      }
+    }
+
+    .agent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .agent-name {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text-main);
+    }
+
+    .agent-status {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: rgba(139, 155, 180, 0.2);
+      color: var(--agent-idle);
+    }
+
+    .agent-status.active {
+      background: rgba(0, 255, 157, 0.2);
+      color: var(--agent-active);
+    }
+
+    .agent-status.processing {
+      background: rgba(255, 184, 0, 0.2);
+      color: var(--warning);
+    }
+
+    .agent-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+
+    /* NEW: Model Selector in Agent Card */
+    .agent-model-selector {
+      margin-top: 8px;
+      display: none;
+      /* Hidden by default */
+    }
+
+    .agent-model-selector.visible {
+      display: block;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        max-height: 0;
+      }
+
+      to {
+        opacity: 1;
+        max-height: 100px;
+      }
+    }
+
+    .agent-model-selector select {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-family: var(--font-code);
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      /* Fix text overflow */
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .agent-model-selector select:hover {
+      border-color: var(--primary);
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    .agent-model-selector select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(0, 242, 255, 0.1);
+    }
+
+    .agent-model-selector option {
+      background: var(--bg-dark);
+      padding: 8px;
+      color: var(--text-main);
+    }
+
+    /* Current model label */
+    .current-model-label {
+      font-size: 9px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-family: var(--font-code);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .current-model-label strong {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .agent-metrics {
+      margin-top: 10px;
+      font-family: var(--font-code);
+      font-size: 10px;
+      color: var(--primary);
+    }
+
+    /* Agent Details Dropdown */
+    .agent-details {
+      margin-top: 10px;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .agent-details.expanded {
+      max-height: 500px;
+      transition: max-height 0.5s ease-in;
+    }
+
+    .agent-details-content {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .detail-label {
+      color: var(--text-muted);
+    }
+
+    .detail-value {
+      color: var(--text-main);
+      font-family: var(--font-code);
+      font-weight: 600;
+    }
+
+    .agent-expand-btn {
+      background: transparent;
+      border: 1px solid var(--glass-border);
+      color: var(--primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      margin-top: 8px;
+      width: 100%;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .agent-expand-btn:hover {
+      background: rgba(0, 242, 255, 0.1);
+      border-color: var(--primary);
+    }
+
+    .expand-icon {
+      transition: transform 0.3s;
+    }
+
+    .expand-icon.rotated {
+      transform: rotate(180deg);
+    }
+
+    /* MAIN CONTENT */
+    .main-content {
+      grid-area: main;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .content-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ENHANCED PATIENT GRID */
+    .patient-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 15px;
+    }
+
+    .patient-card {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 15px;
+      transition: all 0.3s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .patient-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--success), var(--warning), var(--danger));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .patient-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+
+    .patient-card:hover::before {
+      opacity: 1;
+    }
+
+    .patient-card.critical {
+      border-color: var(--danger);
+      background: rgba(255, 0, 85, 0.05);
+    }
+
+    .patient-card.critical::before {
+      opacity: 1;
+      background: var(--danger);
+    }
+
+    .patient-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .patient-id {
+      font-family: var(--font-code);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .patient-alert-badge {
+      background: var(--danger);
+      color: white;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+      animation: pulse 1.5s infinite;
+    }
+
+    /* NEW: Live Vitals Display */
+    .patient-vitals {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .vital-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    .vital-icon {
+      font-size: 14px;
+    }
+
+    .vital-value {
+      font-family: var(--font-code);
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .vital-label {
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+
+    .patient-location {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .risk-meter {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .risk-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--success), var(--warning), var(--danger));
+      transition: width 0.5s;
+    }
+
+    .patient-stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Device Info Collapsible */
+    .device-info-toggle {
+      background: rgba(0, 242, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      color: var(--primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      margin-top: 8px;
+      width: 100%;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .device-info-toggle:hover {
+      background: rgba(0, 242, 255, 0.1);
+    }
+
+    .device-info-details {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .device-info-details.expanded {
+      max-height: 300px;
+      transition: max-height 0.5s ease-in;
+    }
+
+    .device-info-content {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      padding: 8px;
+      margin-top: 8px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      font-size: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .info-value {
+      color: var(--text-main);
+      font-family: var(--font-code);
+    }
+
+    /* Download Report Button - ALWAYS VISIBLE */
+    .download-report-btn {
+      background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
+      border: none !important;
+      color: white !important;
+      padding: 8px 12px !important;
+      border-radius: 6px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      cursor: pointer !important;
+      margin-top: 8px !important;
+      width: 100% !important;
+      display: block !important;
+      transition: all 0.2s !important;
+      box-shadow: 0 2px 8px rgba(0, 242, 255, 0.3) !important;
+    }
+
+    .download-report-btn:hover {
+      transform: translateY(-1px) !important;
+      box-shadow: 0 4px 12px rgba(0, 242, 255, 0.5) !important;
+    }
+
+
+    /* PATIENT DETAIL MODAL */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(5px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--bg-panel);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 30px;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+      width: 90%;
+      animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        transform: translateY(-20px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary);
+      font-family: var(--font-code);
+    }
+
+    .modal-close {
+      background: rgba(255, 0, 85, 0.1);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      background: var(--danger);
+      color: white;
+    }
+
+    .detail-section {
+      margin-bottom: 20px;
+    }
+
+    .detail-section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+
+    .stat-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-family: var(--font-code);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .data-table {
+      width: 100%;
+      font-size: 11px;
+      border-collapse: collapse;
+    }
+
+    .data-table th {
+      text-align: left;
+      padding: 8px;
+      border-bottom: 1px solid var(--glass-border);
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .data-table td {
+      padding: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-family: var(--font-code);
+      font-size: 10px;
+    }
+
+    /* Monitoring Workflow Visualization */
+    .workflow-section {
+      margin-top: 20px;
+    }
+
+    .workflow-timeline {
+      position: relative;
+      padding-left: 30px;
+    }
+
+    .workflow-step {
+      position: relative;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: rgba(0, 0, 0, 0.3);
+      border-left: 3px solid var(--primary);
+      border-radius: 6px;
+    }
+
+    .workflow-step::before {
+      content: '';
+      position: absolute;
+      left: -18px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 8px var(--primary);
+    }
+
+    .workflow-step.completed::before {
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .workflow-step.active::before {
+      background: var(--warning);
+      box-shadow: 0 0 8px var(--warning);
+      animation: pulse 1.5s infinite;
+    }
+
+    .workflow-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+
+    .workflow-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .workflow-time {
+      font-size: 9px;
+      color: var(--text-muted);
+      font-family: var(--font-code);
+      margin-top: 4px;
+    }
+
+    /* Agentic Flow Diagram */
+    .flow-diagram {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .flow-node {
+      background: rgba(0, 242, 255, 0.1);
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--primary);
+      white-space: nowrap;
+      min-width: 100px;
+      text-align: center;
+    }
+
+    .flow-arrow {
+      color: var(--primary);
+      margin: 0 8px;
+      font-size: 14px;
+    }
+
+    .flow-node.active {
+      background: var(--primary);
+      color: var(--bg-dark);
+      animation: pulse 1.5s infinite;
+    }
+
+    /* Collapsible Section */
+    .collapsible-section {
+      margin-bottom: 15px;
+    }
+
+    .collapsible-header {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    .collapsible-header:hover {
+      background: rgba(0, 242, 255, 0.05);
+      border-color: var(--primary);
+    }
+
+    .collapsible-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .collapsible-icon {
+      font-size: 12px;
+      color: var(--primary);
+      transition: transform 0.3s;
+    }
+
+    .collapsible-icon.expanded {
+      transform: rotate(180deg);
+    }
+
+    .collapsible-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .collapsible-content.expanded {
+      max-height: 800px;
+      transition: max-height 0.5s ease-in;
+    }
+
+    .collapsible-body {
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--glass-border);
+      border-top: none;
+      border-radius: 0 0 6px 6px;
+    }
+
+    /* AI ANALYSIS OUTPUT */
+    .analysis-output {
+      background: rgba(0, 0, 0, 0.4);
+      border-left: 3px solid var(--primary);
+      padding: 15px;
+      border-radius: 8px;
+      font-family: var(--font-code);
+      font-size: 12px;
+      line-height: 1.6;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    /* ALERTS PANEL (RIGHT) */
+    .alerts-panel {
+      grid-area: alerts;
+      background: var(--bg-panel);
+      backdrop-filter: blur(20px);
+      border-left: 1px solid var(--glass-border);
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .alert-item {
+      background: rgba(0, 0, 0, 0.3);
+      border-left: 3px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      animation: slideIn 0.3s;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(20px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .alert-item.critical {
+      border-left-color: var(--danger);
+      background: rgba(255, 0, 85, 0.05);
+    }
+
+    .alert-item.warning {
+      border-left-color: var(--warning);
+      background: rgba(255, 184, 0, 0.05);
+    }
+
+    .alert-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .alert-severity {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .alert-severity.critical {
+      color: var(--danger);
+    }
+
+    .alert-severity.warning {
+      color: var(--warning);
+    }
+
+    .alert-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--font-code);
+    }
+
+    .alert-message {
+      font-size: 12px;
+      color: var(--text-main);
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    /* BUTTONS */
+    .btn {
+      background: var(--primary);
+      color: var(--bg-dark);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 242, 255, 0.4);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+    }
+
+    /* SCROLLBARS */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* ========================================
+       MOBILE NAVIGATION BAR
+       ======================================== */
+
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg-panel);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--glass-border);
+      padding: 8px;
+      z-index: 200;
+      box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .mobile-nav-container {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .mobile-nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      min-height: 56px;
+    }
+
+    .mobile-nav-btn:active {
+      transform: scale(0.95);
+    }
+
+    .mobile-nav-btn.active {
+      background: rgba(0, 242, 255, 0.15);
+      color: var(--primary);
+    }
+
+    .mobile-nav-icon {
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .mobile-nav-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .mobile-nav-badge {
+      position: absolute;
+      top: 6px;
+      right: calc(50% - 20px);
+      background: var(--danger);
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 10px;
+      min-width: 18px;
+      text-align: center;
+    }
+
+    /* Hide sections by default on mobile */
+    @media (max-width: 768px) {
+      .mobile-nav {
+        display: block;
+      }
+
+      body {
+        padding-bottom: 72px;
+        /* Space for nav bar */
+      }
+
+      .agents-panel,
+      .alerts-panel {
+        display: none;
+      }
+
+      .main-content {
+        display: block;
+      }
+
+      /* Show active section */
+      .agents-panel.mobile-active {
+        display: block !important;
+      }
+
+      .alerts-panel.mobile-active {
+        display: block !important;
+      }
+
+      .main-content.mobile-hidden {
+        display: none !important;
+      }
+
+      /* Adjust panels for mobile tab view */
+      .agents-panel,
+      .alerts-panel {
+        padding-bottom: 20px;
+      }
+    }
+
+    /* ========================================
+       RESPONSIVE DESIGN - MOBILE SUPPORT
+       ======================================== */
+
+    /* Tablet (768px - 1024px) */
+    @media (max-width: 1024px) {
+      .app-grid {
+        grid-template-areas:
+          "header header"
+          "agents main"
+          "alerts alerts";
+        grid-template-columns: 280px 1fr;
+        grid-template-rows: 60px 1fr auto;
+      }
+
+      .header {
+        padding: 0 15px;
+      }
+
+      .brand {
+        font-size: 16px;
+      }
+
+      .brand-tag {
+        font-size: 9px;
+        padding: 2px 6px;
+      }
+
+      .system-status {
+        gap: 12px;
+      }
+
+      .status-item {
+        font-size: 11px;
+      }
+
+      .agents-panel {
+        padding: 15px;
+      }
+
+      .alerts-panel {
+        max-height: 300px;
+        border-left: none;
+        border-top: 1px solid var(--glass-border);
+      }
+
+      .patient-grid {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Mobile - Large (600px - 768px) */
+    @media (max-width: 768px) {
+      body {
+        overflow-y: auto;
+        height: auto;
+      }
+
+      .app-grid {
+        grid-template-areas:
+          "header"
+          "main"
+          "agents"
+          "alerts";
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto;
+        height: auto;
+        gap: 0;
+      }
+
+      .header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        padding: 10px 15px;
+        height: auto;
+      }
+
+      .brand {
+        font-size: 14px;
+        gap: 8px;
+      }
+
+      .brand svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .brand-tag {
+        font-size: 8px;
+        padding: 2px 5px;
+      }
+
+      .system-status {
+        gap: 8px;
+      }
+
+      .status-item {
+        font-size: 10px;
+      }
+
+      .status-item span {
+        display: none;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+      }
+
+      /* Collapsible Panels on Mobile */
+      .agents-panel,
+      .alerts-panel {
+        border-right: none;
+        border-left: none;
+        border-bottom: 1px solid var(--glass-border);
+        max-height: none;
+        overflow: visible;
+        padding: 15px;
+      }
+
+      .main-content {
+        padding: 15px;
+        overflow-y: visible;
+      }
+
+
+      .panel-title {
+        font-size: 11px;
+        cursor: default;
+        padding: 12px 15px;
+        margin: -15px -15px 15px;
+        background: rgba(0, 242, 255, 0.08);
+        border-bottom: 1px solid var(--glass-border);
+        position: sticky;
+        top: 55px;
+        z-index: 50;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+      }
+
+      .panel-title .model-selector-toggle {
+        font-size: 9px;
+        padding: 5px 8px;
+        min-height: 26px;
+      }
+
+      .panel-title::after {
+        display: none;
+        /* Remove arrow on mobile */
+      }
+
+      .panel-title.collapsed::after {
+        transform: rotate(-90deg);
+      }
+
+
+      .agent-card {
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+
+      .agent-name {
+        font-size: 12px;
+      }
+
+      .agent-desc {
+        font-size: 10px;
+      }
+
+      .content-card {
+        padding: 15px;
+        margin-bottom: 15px;
+      }
+
+      .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .card-title {
+        font-size: 12px;
+      }
+
+      .patient-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .patient-card {
+        padding: 12px;
+      }
+
+      .patient-vitals {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+
+      .stat-box {
+        padding: 10px;
+      }
+
+      .stat-value {
+        font-size: 16px;
+      }
+
+      .modal-content {
+        width: 95%;
+        padding: 20px;
+        max-height: 85vh;
+      }
+
+      .modal-title {
+        font-size: 16px;
+      }
+
+      .modal-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .data-table {
+        font-size: 10px;
+      }
+
+      .data-table th,
+      .data-table td {
+        padding: 6px 4px;
+      }
+
+      .flow-diagram {
+        overflow-x: auto;
+      }
+
+      .flow-node {
+        min-width: 80px;
+        padding: 6px 8px;
+        font-size: 9px;
+      }
+
+      .flow-arrow {
+        margin: 0 4px;
+        font-size: 12px;
+      }
+    }
+
+    /* Mobile - Small (320px - 600px) */
+    @media (max-width: 600px) {
+      .header {
+        padding: 8px 10px;
+      }
+
+      .brand {
+        font-size: 12px;
+        gap: 6px;
+      }
+
+      .brand svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .brand-tag {
+        display: none;
+      }
+
+      .system-status {
+        gap: 6px;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+      }
+
+      .main-content {
+        padding: 10px;
+      }
+
+      .content-card {
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+
+      .card-header {
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+      }
+
+      .card-title {
+        font-size: 11px;
+      }
+
+      .btn {
+        padding: 6px 12px;
+        font-size: 10px;
+      }
+
+      .patient-card {
+        padding: 10px;
+      }
+
+      .patient-id {
+        font-size: 14px;
+      }
+
+      .vital-item {
+        font-size: 10px;
+      }
+
+      .vital-icon {
+        font-size: 12px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .stat-label {
+        font-size: 9px;
+      }
+
+      .stat-value {
+        font-size: 14px;
+      }
+
+      .agent-card {
+        padding: 10px;
+      }
+
+      .agent-name {
+        font-size: 11px;
+      }
+
+      .agent-status {
+        font-size: 9px;
+        padding: 2px 6px;
+      }
+
+      .agent-desc {
+        font-size: 9px;
+      }
+
+      .agent-metrics {
+        font-size: 9px;
+      }
+
+      .alert-item {
+        padding: 10px;
+        margin-bottom: 8px;
+      }
+
+      .alert-severity {
+        font-size: 10px;
+      }
+
+      .alert-time {
+        font-size: 9px;
+      }
+
+      .alert-message {
+        font-size: 11px;
+      }
+
+      .modal-content {
+        padding: 15px;
+        width: 98%;
+      }
+
+      .modal-title {
+        font-size: 14px;
+      }
+
+      .modal-close,
+      .download-report-btn {
+        font-size: 10px !important;
+        padding: 6px 10px !important;
+      }
+
+      .detail-section {
+        margin-bottom: 15px;
+      }
+
+      .detail-section-title {
+        font-size: 11px;
+      }
+
+      .data-table {
+        font-size: 9px;
+      }
+
+      .data-table th,
+      .data-table td {
+        padding: 4px 2px;
+      }
+
+      .workflow-step {
+        padding: 8px;
+        margin-bottom: 8px;
+      }
+
+      .workflow-title {
+        font-size: 10px;
+      }
+
+      .workflow-desc {
+        font-size: 9px;
+      }
+
+      .flow-node {
+        min-width: 60px;
+        padding: 4px 6px;
+        font-size: 8px;
+      }
+
+      .flow-arrow {
+        margin: 0 2px;
+        font-size: 10px;
+      }
+
+      .collapsible-title {
+        font-size: 10px;
+      }
+
+      .analysis-output {
+        font-size: 10px;
+        padding: 10px;
+        max-height: 300px;
+      }
+    }
+
+    /* Extra Small Mobile (< 375px) */
+    @media (max-width: 374px) {
+      .header {
+        padding: 6px 8px;
+      }
+
+      .brand {
+        font-size: 11px;
+      }
+
+      .brand svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .main-content,
+      .agents-panel,
+      .alerts-panel {
+        padding: 8px;
+      }
+
+      .content-card {
+        padding: 10px;
+      }
+
+      .patient-id {
+        font-size: 12px;
+      }
+
+      .stat-value {
+        font-size: 12px;
+      }
+
+      .modal-content {
+        padding: 12px;
+      }
+    }
+
+    /* Landscape orientation optimization */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .header {
+        position: sticky;
+        top: 0;
+      }
+
+      .app-grid {
+        height: auto;
+      }
+
+      .modal-content {
+        max-height: 95vh;
+      }
+    }
+
+    /* Touch-friendly button sizes on mobile */
+    @media (max-width: 768px) {
+
+      button,
+      .btn,
+      .agent-expand-btn,
+      .device-info-toggle,
+      .collapsible-header,
+      .model-selector-toggle {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .download-report-btn {
+        min-height: 44px !important;
+      }
+
+      /* Improve tap targets */
+      .agent-card,
+      .patient-card,
+      .alert-item {
+        min-height: 44px;
+      }
+
+      /* Better spacing for touch */
+      .agent-card {
+        margin-bottom: 15px;
+      }
+
+      .patient-card {
+        margin-bottom: 15px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="app-grid">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" />
+        </svg>
+        <span>UTLMediCore AI</span>
+        <span class="brand-tag">ENHANCED</span>
+      </div>
+
+      <div class="system-status">
+        <div class="status-item">
+          <div class="status-dot" id="mongodb-status"></div>
+          <span>MongoDB</span>
+        </div>
+        <div class="status-item">
+          <div class="status-dot" id="agents-status"></div>
+          <span>AI Agents</span>
+        </div>
+        <div class="status-item">
+          <div class="status-dot" id="socketio-status"></div>
+          <span>Real-time</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGENTS PANEL (LEFT) -->
+    <div class="agents-panel">
+      <div class="panel-title">
+        🤖 Autonomous Agents
+        <button class="model-selector-toggle" onclick="toggleModelSelectors()">
+          <span id="selector-toggle-text">⚙️ Models</span>
+        </button>
+      </div>
+
+      <div class="agent-card" id="agent-monitor">
+        <div class="agent-header">
+          <div class="agent-name">Monitor Agent</div>
+          <div class="agent-status" id="status-monitor">IDLE</div>
+        </div>
+        <div class="agent-desc">Real-time anomaly detection & vital monitoring</div>
+        <div class="current-model-label" id="current-model-monitor">🔹 Model: <strong>Loading...</strong></div>
+        <div class="agent-model-selector" id="selector-monitor">
+          <select onchange="updateAgentModel('monitor', this.value)">
+            <!-- Options populated by JS -->
+          </select>
+        </div>
+        <div class="agent-metrics" id="metrics-monitor">Checks: 0 | Anomalies: 0</div>
+
+        <!-- Agent Details Dropdown -->
+        <button class="agent-expand-btn" onclick="toggleAgentDetails('monitor')">
+          <span id="btn-text-monitor">Show Details</span>
+          <span class="expand-icon" id="icon-monitor">▼</span>
+        </button>
+        <div class="agent-details" id="details-monitor">
+          <div class="agent-details-content">
+            <div class="detail-row">
+              <span class="detail-label">Primary Function:</span>
+              <span class="detail-value">Anomaly Detection</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Detection Speed:</span>
+              <span class="detail-value" id="speed-monitor">&lt;3s</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Monitoring:</span>
+              <span class="detail-value">Falls, HR, SpO2, Context</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Last Activity:</span>
+              <span class="detail-value" id="last-activity-monitor">-</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Success Rate:</span>
+              <span class="detail-value" id="success-monitor">100%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="agent-analyzer">
+        <div class="agent-header">
+          <div class="agent-name">Analyzer Agent</div>
+          <div class="agent-status" id="status-analyzer">IDLE</div>
+        </div>
+        <div class="agent-desc">Pattern detection & trend analysis</div>
+        <div class="current-model-label" id="current-model-analyzer">🔹 Model: <strong>Loading...</strong></div>
+        <div class="agent-model-selector" id="selector-analyzer">
+          <select onchange="updateAgentModel('analyzer', this.value)">
+            <!-- Options populated by JS -->
+          </select>
+        </div>
+        <div class="agent-metrics" id="metrics-analyzer">Patterns: 0</div>
+
+        <button class="agent-expand-btn" onclick="toggleAgentDetails('analyzer')">
+          <span id="btn-text-analyzer">Show Details</span>
+          <span class="expand-icon" id="icon-analyzer">▼</span>
+        </button>
+        <div class="agent-details" id="details-analyzer">
+          <div class="agent-details-content">
+            <div class="detail-row">
+              <span class="detail-label">Primary Function:</span>
+              <span class="detail-value">Pattern Analysis</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Analysis Window:</span>
+              <span class="detail-value">100 data points</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Capabilities:</span>
+              <span class="detail-value">Trends, Statistics, Risk</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Last Analysis:</span>
+              <span class="detail-value" id="last-activity-analyzer">-</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Patterns Found:</span>
+              <span class="detail-value" id="patterns-found">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="agent-alert">
+        <div class="agent-header">
+          <div class="agent-name">Alert Agent</div>
+          <div class="agent-status" id="status-alert">IDLE</div>
+        </div>
+        <div class="agent-desc">Priority-based alert generation</div>
+        <div class="current-model-label" id="current-model-alert">🔹 Model: <strong>Loading...</strong></div>
+        <div class="agent-model-selector" id="selector-alert">
+          <select onchange="updateAgentModel('alert', this.value)">
+            <!-- Options populated by JS -->
+          </select>
+        </div>
+        <div class="agent-metrics" id="metrics-alert">Active Alerts: 0</div>
+
+        <button class="agent-expand-btn" onclick="toggleAgentDetails('alert')">
+          <span id="btn-text-alert">Show Details</span>
+          <span class="expand-icon" id="icon-alert">▼</span>
+        </button>
+        <div class="agent-details" id="details-alert">
+          <div class="agent-details-content">
+            <div class="detail-row">
+              <span class="detail-label">Primary Function:</span>
+              <span class="detail-value">Alert Generation</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Priority Levels:</span>
+              <span class="detail-value">CRITICAL, WARNING, INFO</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Actions Provided:</span>
+              <span class="detail-value">Yes (Recommended)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Critical Alerts:</span>
+              <span class="detail-value" id="critical-count">0</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Response Time:</span>
+              <span class="detail-value">&lt;1s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="agent-predictor">
+        <div class="agent-header">
+          <div class="agent-name">Predictor Agent</div>
+          <div class="agent-status" id="status-predictor">IDLE</div>
+        </div>
+        <div class="agent-desc">Future risk estimation & forecasting</div>
+        <div class="current-model-label" id="current-model-predictor">🔹 Model: <strong>Loading...</strong></div>
+        <div class="agent-model-selector" id="selector-predictor">
+          <select onchange="updateAgentModel('predictor', this.value)">
+            <!-- Options populated by JS -->
+          </select>
+        </div>
+        <div class="agent-metrics" id="metrics-predictor">Predictions: 0</div>
+
+        <button class="agent-expand-btn" onclick="toggleAgentDetails('predictor')">
+          <span id="btn-text-predictor">Show Details</span>
+          <span class="expand-icon" id="icon-predictor">▼</span>
+        </button>
+        <div class="agent-details" id="details-predictor">
+          <div class="agent-details-content">
+            <div class="detail-row">
+              <span class="detail-label">Primary Function:</span>
+              <span class="detail-value">Risk Forecasting</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Forecast Window:</span>
+              <span class="detail-value">Next 1 hour</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Methods:</span>
+              <span class="detail-value">Trend Analysis, ML</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Accuracy:</span>
+              <span class="detail-value" id="predictor-accuracy">-</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Recommendations:</span>
+              <span class="detail-value">Preventive Actions</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="agent-coordinator">
+        <div class="agent-header">
+          <div class="agent-name">Coordinator Agent</div>
+          <div class="agent-status" id="status-coordinator">IDLE</div>
+        </div>
+        <div class="agent-desc">Multi-agent orchestration & decision making</div>
+        <div class="current-model-label" id="current-model-coordinator">🔹 Model: <strong>Loading...</strong></div>
+        <div class="agent-model-selector" id="selector-coordinator">
+          <select onchange="updateAgentModel('coordinator', this.value)">
+            <!-- Options populated by JS -->
+          </select>
+        </div>
+        <div class="agent-metrics" id="metrics-coordinator">Coordinations: 0</div>
+
+        <button class="agent-expand-btn" onclick="toggleAgentDetails('coordinator')">
+          <span id="btn-text-coordinator">Show Details</span>
+          <span class="expand-icon" id="icon-coordinator">▼</span>
+        </button>
+        <div class="agent-details" id="details-coordinator">
+          <div class="agent-details-content">
+            <div class="detail-row">
+              <span class="detail-label">Primary Function:</span>
+              <span class="detail-value">Orchestration</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Manages Agents:</span>
+              <span class="detail-value">5 Autonomous Agents</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">AI Summary:</span>
+              <span class="detail-value">Natural Language</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Decision Making:</span>
+              <span class="detail-value">Autonomous</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Coordination Time:</span>
+              <span class="detail-value" id="coord-time">&lt;5s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+
+      <!-- PATIENT STATUS -->
+      <div class="content-card">
+        <div class="card-header">
+          <div class="card-title">📊 Patient Monitoring</div>
+          <button class="btn btn-secondary" onclick="refreshPatients()">Refresh</button>
+        </div>
+        <div class="patient-grid" id="patient-grid">
+          <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">
+            Waiting for patient data...
+          </div>
+        </div>
+      </div>
+
+      <!-- AI ANALYSIS -->
+      <div class="content-card">
+        <div class="card-header">
+          <div class="card-title">🧠 Autonomous Analysis</div>
+          <button class="btn" onclick="requestAnalysis()">Force Analysis</button>
+        </div>
+        <div class="analysis-output" id="analysis-output">
+          <div style="color: var(--text-muted);">System ready. Autonomous analysis will appear here.</div>
+        </div>
+      </div>
+
+      <!-- MONITORING WORKFLOW -->
+      <div class="content-card">
+        <div class="card-header">
+          <div class="card-title">🔄 Monitoring Workflow</div>
+        </div>
+
+        <!-- Collapsible: Agentic Flow -->
+        <div class="collapsible-section">
+          <div class="collapsible-header" onclick="toggleCollapsible('agentic-flow')">
+            <div class="collapsible-title">📊 Agentic Flow Diagram</div>
+            <div class="collapsible-icon" id="icon-agentic-flow">▼</div>
+          </div>
+          <div class="collapsible-content" id="content-agentic-flow">
+            <div class="collapsible-body">
+              <div class="flow-diagram">
+                <div class="flow-row">
+                  <div class="flow-node" id="flow-mongodb">MongoDB</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node" id="flow-listener">Listener</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node" id="flow-state">Patient State</div>
+                </div>
+                <div class="flow-row" style="margin-left: 40px;">
+                  <div class="flow-arrow" style="transform: rotate(90deg);">↓</div>
+                </div>
+                <div class="flow-row">
+                  <div class="flow-node" id="flow-monitor">Monitor</div>
+                  <div class="flow-arrow">+</div>
+                  <div class="flow-node" id="flow-analyzer">Analyzer</div>
+                  <div class="flow-arrow">+</div>
+                  <div class="flow-node" id="flow-predictor">Predictor</div>
+                </div>
+                <div class="flow-row" style="margin-left: 40px;">
+                  <div class="flow-arrow" style="transform: rotate(90deg);">↓</div>
+                </div>
+                <div class="flow-row">
+                  <div class="flow-node" id="flow-coordinator">Coordinator</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node" id="flow-decision">Decision</div>
+                </div>
+                <div class="flow-row" style="margin-left: 40px;">
+                  <div class="flow-arrow" style="transform: rotate(90deg);">↓</div>
+                </div>
+                <div class="flow-row">
+                  <div class="flow-node" id="flow-alert">Alert Agent</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node" id="flow-broadcast">WebSocket</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node" id="flow-ui">Dashboard UI</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible: Real-time Timeline -->
+        <div class="collapsible-section">
+          <div class="collapsible-header" onclick="toggleCollapsible('workflow-timeline')">
+            <div class="collapsible-title">⏱️ Real-time Activity Timeline</div>
+            <div class="collapsible-icon" id="icon-workflow-timeline">▼</div>
+          </div>
+          <div class="collapsible-content" id="content-workflow-timeline">
+            <div class="collapsible-body">
+              <div class="workflow-timeline" id="activity-timeline">
+                <div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 11px;">
+                  Waiting for agent activity...
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible: System Statistics -->
+        <div class="collapsible-section">
+          <div class="collapsible-header" onclick="toggleCollapsible('system-stats')">
+            <div class="collapsible-title">📈 System Statistics</div>
+            <div class="collapsible-icon" id="icon-system-stats">▼</div>
+          </div>
+          <div class="collapsible-content" id="content-system-stats">
+            <div class="collapsible-body">
+              <div class="stats-grid">
+                <div class="stat-box">
+                  <div class="stat-label">Total Patients</div>
+                  <div class="stat-value" id="stat-total-patients">0</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">Active Monitoring</div>
+                  <div class="stat-value" id="stat-active-patients">0</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">Total Alerts</div>
+                  <div class="stat-value" id="stat-total-alerts">0</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">Critical Alerts</div>
+                  <div class="stat-value" id="stat-critical-alerts" style="color: var(--danger);">0</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">Avg Risk Score</div>
+                  <div class="stat-value" id="stat-avg-risk">0.00</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">System Uptime</div>
+                  <div class="stat-value" id="stat-uptime" style="font-size: 14px;">00:00:00</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ALERTS PANEL (RIGHT) -->
+    <div class="alerts-panel">
+      <div class="panel-title">🚨 Real-time Alerts</div>
+      <div id="alerts-container">
+        <div style="text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 12px;">
+          No alerts yet. System is monitoring...
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MOBILE NAVIGATION BAR -->
+  <div class="mobile-nav">
+    <div class="mobile-nav-container">
+      <button class="mobile-nav-btn active" onclick="switchMobileView('main')" id="nav-main">
+        <div class="mobile-nav-icon">📊</div>
+        <div class="mobile-nav-label">Main</div>
+      </button>
+      <button class="mobile-nav-btn" onclick="switchMobileView('agents')" id="nav-agents">
+        <div class="mobile-nav-icon">🤖</div>
+        <div class="mobile-nav-label">Agents</div>
+      </button>
+      <button class="mobile-nav-btn" onclick="switchMobileView('alerts')" id="nav-alerts">
+        <div class="mobile-nav-icon">🚨</div>
+        <div class="mobile-nav-label">Alerts</div>
+        <span class="mobile-nav-badge" id="alerts-badge" style="display: none;">0</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- PATIENT DETAIL MODAL -->
+  <div class="modal-overlay" id="patient-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-patient-id">Patient Details</div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="download-report-btn" id="modal-download-btn" onclick="event.stopPropagation();"
+            style="padding:8px 16px; font-size:12px; width:auto;">
+            📥 Download Report
+          </button>
+          <button class="modal-close" onclick="closePatientModal()">✕ Close</button>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Statistics (Last 20 readings)</div>
+        <div class="stats-grid" id="modal-stats">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Recent Data</div>
+        <div style="max-height: 300px; overflow-y: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>HR</th>
+                <th>SpO2</th>
+                <th>Posture</th>
+                <th>Location</th>
+              </tr>
+            </thead>
+            <tbody id="modal-data-table">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Recent Alerts</div>
+        <div id="modal-alerts">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========================================
+    // SOCKET.IO CONNECTION
+    // ========================================
+    const socket = io();
+
+    let patientStates = {};
+    let activeAlerts = [];
+    let availableModels = [];
+    let modelPreferences = {};
+    let agentMetrics = {
+      monitor: { checks: 0, anomalies: 0 },
+      analyzer: { patterns: 0 },
+      alert: { active: 0 },
+      predictor: { predictions: 0 },
+      coordinator: { coordinations: 0 }
+    };
+
+    // ========================================
+    // MOBILE NAVIGATION
+    // ========================================
+
+    function switchMobileView(view) {
+      // Get all panels
+      const mainPanel = document.querySelector('.main-content');
+      const agentsPanel = document.querySelector('.agents-panel');
+      const alertsPanel = document.querySelector('.alerts-panel');
+
+      // Get all nav buttons
+      const navMain = document.getElementById('nav-main');
+      const navAgents = document.getElementById('nav-agents');
+      const navAlerts = document.getElementById('nav-alerts');
+
+      // Remove active classes from all
+      navMain.classList.remove('active');
+      navAgents.classList.remove('active');
+      navAlerts.classList.remove('active');
+
+      mainPanel.classList.remove('mobile-hidden');
+      agentsPanel.classList.remove('mobile-active');
+      alertsPanel.classList.remove('mobile-active');
+
+      // Switch to selected view
+      switch (view) {
+        case 'main':
+          navMain.classList.add('active');
+          // Main is visible by default, hide others
+          break;
+        case 'agents':
+          navAgents.classList.add('active');
+          mainPanel.classList.add('mobile-hidden');
+          agentsPanel.classList.add('mobile-active');
+          break;
+        case 'alerts':
+          navAlerts.classList.add('active');
+          mainPanel.classList.add('mobile-hidden');
+          alertsPanel.classList.add('mobile-active');
+          break;
+      }
+
+      // Scroll to top of new view
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Update alerts badge count
+    function updateAlertsBadge(count) {
+      const badge = document.getElementById('alerts-badge');
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : count;
+        badge.style.display = 'block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+
+    // Connection status
+    socket.on('connect', () => {
+      console.log('✅ Connected to Agentic AI Backend');
+      document.getElementById('socketio-status').classList.add('active');
+      document.getElementById('agents-status').classList.add('active');
+      document.getElementById('mongodb-status').classList.add('active');
+
+      // Load models and preferences
+      loadAvailableModels();
+      loadModelPreferences();
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Disconnected from backend');
+      document.getElementById('socketio-status').classList.remove('active');
+    });
+
+    // ========================================
+    // MODEL MANAGEMENT
+    // ========================================
+
+    async function loadAvailableModels() {
+      try {
+        const res = await fetch('/api/available-models');
+        const data = await res.json();
+        availableModels = data.models;
+        console.log(`✅ Loaded ${data.count} AI models`);
+      } catch (e) {
+        console.error('Failed to load models:', e);
+      }
+    }
+
+    async function loadModelPreferences() {
+      try {
+        const res = await fetch('/api/model-preferences');
+        modelPreferences = await res.json();
+        populateModelSelectors();
+        console.log('✅ Loaded model preferences');
+      } catch (e) {
+        console.error('Failed to load preferences:', e);
+      }
+    }
+
+    function populateModelSelectors() {
+      const agents = ['monitor', 'analyzer', 'alert', 'predictor', 'coordinator'];
+
+      agents.forEach(agent => {
+        const selector = document.querySelector(`#selector-${agent} select`);
+        const currentModelLabel = document.getElementById(`current-model-${agent}`);
+
+        if (!selector) return;
+
+        selector.innerHTML = '';
+
+        availableModels.forEach(model => {
+          const option = document.createElement('option');
+          option.value = model;
+          // Clean model name for display
+          const cleanName = model.replace('ollama:', '').replace('openai:', '');
+          option.textContent = cleanName;
+
+          if (model === modelPreferences[agent]) {
+            option.selected = true;
+            // Update current model label
+            if (currentModelLabel) {
+              currentModelLabel.innerHTML = `🔹 Model: <strong>${cleanName}</strong>`;
+            }
+          }
+
+          selector.appendChild(option);
+        });
+
+        // If no preference set yet, use first model as default
+        if (!modelPreferences[agent] && availableModels.length > 0 && currentModelLabel) {
+          const defaultModel = availableModels[0].replace('ollama:', '').replace('openai:', '');
+          currentModelLabel.innerHTML = `🔹 Model: <strong>${defaultModel}</strong>`;
+        }
+      });
+    }
+
+    function toggleModelSelectors() {
+      const selectors = document.querySelectorAll('.agent-model-selector');
+      const toggleText = document.getElementById('selector-toggle-text');
+
+      selectors.forEach(sel => {
+        sel.classList.toggle('visible');
+      });
+
+      const isVisible = selectors[0].classList.contains('visible');
+      toggleText.textContent = isVisible ? '✓ Models' : '⚙️ Models';
+    }
+
+    async function updateAgentModel(agent, model) {
+      try {
+        const res = await fetch('/api/model-preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent, model })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          console.log(`✅ ${agent} agent model updated to ${model}`);
+          modelPreferences[agent] = model;
+
+          // Update current model label
+          const currentModelLabel = document.getElementById(`current-model-${agent}`);
+          const cleanName = model.replace('ollama:', '').replace('openai:', '');
+          if (currentModelLabel) {
+            currentModelLabel.innerHTML = `🔹 Model: <strong>${cleanName}</strong>`;
+          }
+
+          // Show toast notification
+          showToast(`${agent.toUpperCase()}: ${cleanName}`, 'success');
+        }
+      } catch (e) {
+        console.error('Failed to update model:', e);
+        showToast('Failed to update model', 'error');
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      // Simple toast notification
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+      position: fixed;
+      top: 90px;
+      right: 20px;
+      background: ${type === 'success' ? 'var(--success)' : 'var(--danger)'};
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      z-index: 9999;
+      animation: slideIn 0.3s;
+    `;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s';
+        setTimeout(() => toast.remove(), 300);
+      }, 2000);
+    }
+
+    // ========================================
+    // PATIENT STATE UPDATES
+    // ========================================
+    socket.on('patient_states', (states) => {
+      patientStates = states;
+      renderPatients();
+    });
+
+    socket.on('sensor_update', (data) => {
+      const deviceId = data.device_id;
+
+      if (!patientStates[deviceId]) {
+        patientStates[deviceId] = {
+          device_id: deviceId,
+          risk_score: 0,
+          data_points: 0,
+          latest_data: null,
+          recent_alerts: 0
+        };
+      }
+
+      patientStates[deviceId].data_points++;
+      patientStates[deviceId].last_update = new Date().toISOString();
+      patientStates[deviceId].latest_data = data.data;
+
+      renderPatients();
+
+      setAgentActive('monitor', 'SCANNING');
+      setTimeout(() => setAgentActive('monitor', 'IDLE'), 1000);
+    });
+
+    // ========================================
+    // ALERT HANDLING
+    // ========================================
+    socket.on('ai_alert', (alert) => {
+      activeAlerts.unshift(alert);
+      if (activeAlerts.length > 20) activeAlerts.pop();
+
+      renderAlerts();
+
+      agentMetrics.alert.active = activeAlerts.filter(a =>
+        new Date(a.timestamp) > new Date(Date.now() - 3600000)
+      ).length;
+      updateAgentMetrics();
+
+      // Update mobile alerts badge
+      updateAlertsBadge(activeAlerts.length);
+
+      setAgentActive('alert', 'PROCESSING');
+      setTimeout(() => setAgentActive('alert', 'IDLE'), 2000);
+
+      if (alert.severity === 'CRITICAL') {
+        playAlertSound();
+      }
+    });
+
+    // ========================================
+    // ANALYSIS RESULTS
+    // ========================================
+    socket.on('analysis_result', (data) => {
+      displayAnalysis(data);
+
+      setAgentActive('coordinator', 'ACTIVE');
+      setAgentActive('analyzer', 'ACTIVE');
+      setAgentActive('predictor', 'ACTIVE');
+
+      setTimeout(() => {
+        setAgentActive('coordinator', 'IDLE');
+        setAgentActive('analyzer', 'IDLE');
+        setAgentActive('predictor', 'IDLE');
+      }, 3000);
+
+      agentMetrics.coordinator.coordinations++;
+      agentMetrics.analyzer.patterns++;
+      agentMetrics.predictor.predictions++;
+      updateAgentMetrics();
+    });
+
+    // ========================================
+    // AGENT ACTIVITY LOGGING
+    // ========================================
+    socket.on('agent_activity', (activity) => {
+      console.log(`[${activity.agent}] ${activity.action} - ${activity.status}`);
+
+      // Update metrics based on activity
+      if (activity.agent === 'Monitor Agent' && activity.status === 'success') {
+        agentMetrics.monitor.checks++;
+      }
+      if (activity.status === 'error' || activity.status === 'warning') {
+        agentMetrics.monitor.anomalies++;
+      }
+
+      updateAgentMetrics();
+
+      // Update activity timeline
+      if (typeof updateActivityTimeline === 'function') {
+        updateActivityTimeline(activity);
+      }
+
+      // Update flow diagram
+      if (typeof updateFlowDiagram === 'function') {
+        updateFlowDiagram(activity);
+      }
+
+      // Update last activity timestamp
+      if (typeof updateAgentLastActivity === 'function') {
+        updateAgentLastActivity(activity.agent, activity.timestamp);
+      }
+    });
+
+    // ========================================
+    // UI RENDERING FUNCTIONS
+    // ========================================
+
+    // Global state untuk menyimpan expand status
+    const expandedDevices = new Set();
+
+    function renderPatients() {
+      const grid = document.getElementById('patient-grid');
+
+      if (Object.keys(patientStates).length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">No patients detected yet...</div>';
+        return;
+      }
+
+      grid.innerHTML = '';
+
+      for (const [deviceId, state] of Object.entries(patientStates)) {
+        const card = document.createElement('div');
+        card.className = 'patient-card';
+        if (state.risk_score > 0.7) card.classList.add('critical');
+
+        const riskPercent = (state.risk_score || 0) * 100;
+        const latest = state.latest_data || {};
+
+        // ALWAYS render vitals section - use placeholders if no data
+        const vitalsHTML = `
+          <div class="patient-vitals">
+            <div class="vital-item">
+              <span class="vital-icon">💓</span>
+              <span class="vital-value">${latest.HR || '--'}</span>
+              <span class="vital-label">bpm</span>
+            </div>
+            <div class="vital-item">
+              <span class="vital-icon">🫁</span>
+              <span class="vital-value">${latest.SpO2 || '--'}</span>
+              <span class="vital-label">%</span>
+            </div>
+            <div class="vital-item">
+              <span class="vital-icon">👤</span>
+              <span class="vital-value">${latest.Posture || 'N/A'}</span>
+            </div>
+            <div class="vital-item">
+              <span class="vital-icon">🚶</span>
+              <span class="vital-value">${latest.Steps || '0'}</span>
+              <span class="vital-label">steps</span>
+            </div>
+          </div>
+          <div class="patient-location">
+            📍 ${latest.Area || 'Unknown Location'}
+          </div>
+        `;
+
+        const alertBadge = state.recent_alerts > 0
+          ? `<div class="patient-alert-badge">${state.recent_alerts} Alert${state.recent_alerts > 1 ? 's' : ''}</div>`
+          : '';
+
+        // Check if this device was expanded before
+        const isExpanded = expandedDevices.has(deviceId);
+        const expandIcon = isExpanded ? '▲' : '▼';
+        const expandedClass = isExpanded ? 'expanded' : '';
+
+        // IMPORTANT: Build card HTML with GUARANTEED download button at the end
+        card.innerHTML = `
+        <div class="patient-header">
+          <div class="patient-id">${deviceId}</div>
+          ${alertBadge}
+        </div>
+        ${vitalsHTML}
+        <div class="risk-meter">
+          <div class="risk-fill" style="width: ${riskPercent}%"></div>
+        </div>
+        <div class="patient-stats">
+          <span>Risk: ${(state.risk_score || 0).toFixed(2)}</span>
+          <span>Data: ${state.data_points || 0}</span>
+        </div>
+        
+        <button class="device-info-toggle" onclick="event.stopPropagation(); toggleDeviceInfo('${deviceId}')" style="margin-top:8px;">
+          📋 Device Info ${expandIcon}
+        </button>
+        
+        <div class="device-info-details ${expandedClass}" id="device-info-${deviceId}">
+          <div class="device-info-content">
+            <div class="info-row">
+              <span class="info-label">Device ID:</span>
+              <span class="info-value">${deviceId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Risk Score:</span>
+              <span class="info-value">${(state.risk_score || 0).toFixed(2)}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Data Points:</span>
+              <span class="info-value">${state.data_points || 0}</span>
+            </div>
+            <div class="info-row" style="border-bottom:none;">
+              <span class="info-label">Last Update:</span>
+              <span class="info-value">${state.last_update ? new Date(state.last_update).toLocaleTimeString() : 'N/A'}</span>
+            </div>
+            
+            <button class="download-report-btn" onclick="event.stopPropagation(); showReportDownloadModal('${deviceId}')" style="margin-top:12px;">
+              📥 Download Report
+            </button>
+          </div>
+        </div>
+      `;
+
+        card.onclick = () => showPatientDetail(deviceId);
+
+        grid.appendChild(card);
+      }
+    }
+
+    // Function to toggle device info
+    window.toggleDeviceInfo = function (deviceId) {
+      const details = document.getElementById(`device-info-${deviceId}`);
+      const button = details.previousElementSibling;
+
+      if (expandedDevices.has(deviceId)) {
+        // Collapse
+        expandedDevices.delete(deviceId);
+        details.classList.remove('expanded');
+        button.innerHTML = button.innerHTML.replace('▲', '▼');
+      } else {
+        // Expand
+        expandedDevices.add(deviceId);
+        details.classList.add('expanded');
+        button.innerHTML = button.innerHTML.replace('▼', '▲');
+      }
+    };
+
+
+    function renderAlerts() {
+      const container = document.getElementById('alerts-container');
+
+      if (activeAlerts.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 12px;">No alerts yet. System is monitoring...</div>';
+        return;
+      }
+
+      container.innerHTML = '';
+
+      activeAlerts.slice(0, 10).forEach(alert => {
+        const item = document.createElement('div');
+        item.className = `alert-item ${alert.severity.toLowerCase()}`;
+
+        const time = new Date(alert.timestamp).toLocaleTimeString();
+
+        item.innerHTML = `
+        <div class="alert-header">
+          <div class="alert-severity ${alert.severity.toLowerCase()}">${alert.severity}</div>
+          <div class="alert-time">${time}</div>
+        </div>
+        <div class="alert-message">${alert.message}</div>
+      `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function displayAnalysis(data, deviceId, currentState) {
+      const output = document.getElementById('analysis-output');
+      const timestamp = new Date().toLocaleString();
+
+      let html = `<div style="color: var(--text-muted); font-size: 10px; margin-bottom: 15px;">📅 Analysis Timestamp: ${timestamp}</div>`;
+
+      // === CURRENT DEVICE STATUS SECTION ===
+      if (deviceId && currentState) {
+        html += `
+          <div style="margin-bottom: 20px; padding: 15px; background: rgba(0, 242, 255, 0.05); border-left: 3px solid var(--primary); border-radius: 6px;">
+            <div style="color: var(--primary); font-weight: 700; font-size: 13px; margin-bottom: 12px;">
+              📱 CURRENT DEVICE STATUS
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px;">
+              <div>
+                <div style="color: var(--text-muted); font-size: 9px;">DEVICE ID</div>
+                <div style="color: var(--text-main); font-weight: 600; font-size: 12px;">${deviceId}</div>
+              </div>
+              <div>
+                <div style="color: var(--text-muted); font-size: 9px;">LOCATION</div>
+                <div style="color: var(--text-main); font-weight: 600; font-size: 12px;">${currentState.location || 'Unknown'}</div>
+              </div>
+            </div>
+
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+              <div style="color: var(--text-muted); font-size: 9px; margin-bottom: 8px;">VITAL SIGNS</div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; text-align: center;">
+                  <div style="color: var(--success); font-size: 10px;">❤️ HR</div>
+                  <div style="color: var(--text-main); font-weight: 700; font-size: 14px;">${currentState.heart_rate || 'N/A'}</div>
+                  <div style="color: var(--text-muted); font-size: 8px;">bpm</div>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; text-align: center;">
+                  <div style="color: var(--primary); font-size: 10px;">💨 SpO2</div>
+                  <div style="color: var(--text-main); font-weight: 700; font-size: 14px;">${currentState.spo2 || 'N/A'}</div>
+                  <div style="color: var(--text-muted); font-size: 8px;">%</div>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; text-align: center;">
+                  <div style="color: var(--warning); font-size: 10px;">🧍 Posture</div>
+                  <div style="color: var(--text-main); font-weight: 700; font-size: 11px;">${currentState.posture || 'N/A'}</div>
+                  <div style="color: var(--text-muted); font-size: 8px;">&nbsp;</div>
+                </div>
+              </div>
+            </div>
+
+            ${currentState.context ? `
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <div style="color: var(--text-muted); font-size: 9px;">CONTEXT</div>
+                <div style="color: var(--text-main); font-size: 11px; margin-top: 4px;">${currentState.context}</div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+
+      // === AI ANALYSIS SECTION ===
+      if (data.summary) {
+        html += `
+          <div style="margin-bottom: 15px; padding: 15px; background: rgba(112, 0, 255, 0.05); border-left: 3px solid var(--secondary); border-radius: 6px;">
+            <div style="color: var(--secondary); font-weight: 700; font-size: 13px; margin-bottom: 10px;">
+              🧠 AI AUTONOMOUS ANALYSIS
+            </div>
+            <div style="color: var(--text-main); line-height: 1.6; font-size: 12px;">
+              ${data.summary.replace(/\n/g, '<br>')}
+            </div>
+          </div>
+        `;
+      }
+
+      // === ADDITIONAL INSIGHTS ===
+      if (data.insights && data.insights.length > 0) {
+        html += `
+          <div style="margin-bottom: 15px;">
+            <div style="color: var(--warning); font-weight: 700; font-size: 12px; margin-bottom: 8px;">
+              💡 KEY INSIGHTS
+            </div>
+        `;
+        data.insights.forEach((insight, idx) => {
+          html += `
+            <div style="padding: 8px 12px; background: rgba(255, 184, 0, 0.05); border-left: 2px solid var(--warning); border-radius: 4px; margin-bottom: 6px; font-size: 11px;">
+              ${idx + 1}. ${insight}
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // === RECOMMENDATIONS ===
+      if (data.recommendations && data.recommendations.length > 0) {
+        html += `
+          <div style="margin-bottom: 15px;">
+            <div style="color: var(--success); font-weight: 700; font-size: 12px; margin-bottom: 8px;">
+              ✅ RECOMMENDATIONS
+            </div>
+        `;
+        data.recommendations.forEach((rec, idx) => {
+          html += `
+            <div style="padding: 8px 12px; background: rgba(0, 255, 157, 0.05); border-left: 2px solid var(--success); border-radius: 4px; margin-bottom: 6px; font-size: 11px;">
+              ${idx + 1}. ${rec}
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // === RISK ASSESSMENT ===
+      if (data.risk_level) {
+        const riskColors = {
+          'LOW': 'var(--success)',
+          'MODERATE': 'var(--warning)',
+          'HIGH': 'var(--danger)',
+          'CRITICAL': 'var(--danger)'
+        };
+        const riskColor = riskColors[data.risk_level] || 'var(--text-muted)';
+
+        html += `
+          <div style="padding: 10px 15px; background: rgba(0,0,0,0.3); border-radius: 6px; border: 1px solid ${riskColor};">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="color: var(--text-muted); font-size: 10px;">RISK LEVEL</div>
+              <div style="color: ${riskColor}; font-weight: 700; font-size: 13px;">⚠️ ${data.risk_level || 'UNKNOWN'}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      output.innerHTML = html;
+
+      // Smooth scroll to analysis section on mobile
+      if (window.innerWidth <= 768) {
+        output.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    // ========================================
+    // PATIENT DETAIL MODAL
+    // ========================================
+
+    async function showPatientDetail(deviceId) {
+      try {
+        const res = await fetch(`/api/patient-detail/${deviceId}`);
+        const detail = await res.json();
+
+        document.getElementById('modal-patient-id').textContent = `Patient: ${deviceId}`;
+
+        // Render statistics
+        const statsGrid = document.getElementById('modal-stats');
+        statsGrid.innerHTML = `
+        <div class="stat-box">
+          <div class="stat-label">Avg HR</div>
+          <div class="stat-value">${detail.statistics.hr_avg}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">HR Range</div>
+          <div class="stat-value" style="font-size: 14px;">${detail.statistics.hr_min}-${detail.statistics.hr_max}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Avg SpO2</div>
+          <div class="stat-value">${detail.statistics.spo2_avg}%</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Risk Score</div>
+          <div class="stat-value">${detail.risk_score.toFixed(2)}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Total Data</div>
+          <div class="stat-value">${detail.total_data_points}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Min SpO2</div>
+          <div class="stat-value">${detail.statistics.spo2_min}%</div>
+        </div>
+      `;
+
+        // Render data table
+        const dataTable = document.getElementById('modal-data-table');
+        dataTable.innerHTML = detail.recent_data.map(d => {
+          const time = new Date(d.timestamp).toLocaleTimeString();
+          return `
+          <tr>
+            <td>${time}</td>
+            <td>${d.HR} bpm</td>
+            <td>${d.SpO2}%</td>
+            <td>${d.Posture}</td>
+            <td>${d.Area}</td>
+          </tr>
+        `;
+        }).join('');
+
+        // Render alerts
+        const modalAlerts = document.getElementById('modal-alerts');
+        if (detail.alerts.length === 0) {
+          modalAlerts.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 11px;">No alerts for this patient</div>';
+        } else {
+          modalAlerts.innerHTML = detail.alerts.map(alert => {
+            return `
+            <div class="alert-item ${alert.severity.toLowerCase()}" style="margin-bottom: 8px;">
+              <div class="alert-header">
+                <div class="alert-severity ${alert.severity.toLowerCase()}">${alert.severity}</div>
+                <div class="alert-time">${new Date(alert.timestamp).toLocaleString()}</div>
+              </div>
+              <div class="alert-message">${alert.message}</div>
+            </div>
+          `;
+          }).join('');
+        }
+
+        // Wire up the download button with this patient's device ID
+        const modalDownloadBtn = document.getElementById('modal-download-btn');
+        modalDownloadBtn.onclick = () => showReportDownloadModal(deviceId);
+
+        document.getElementById('patient-modal').classList.add('visible');
+      } catch (e) {
+        console.error('Failed to load patient detail:', e);
+        alert('Failed to load patient details');
+      }
+    }
+
+    function closePatientModal() {
+      document.getElementById('patient-modal').classList.remove('visible');
+    }
+
+    function setAgentActive(agentName, status) {
+      const card = document.getElementById(`agent-${agentName}`);
+      const statusEl = document.getElementById(`status-${agentName}`);
+
+      card.classList.remove('active', 'processing');
+      statusEl.classList.remove('active', 'processing');
+
+      statusEl.textContent = status;
+
+      if (status === 'ACTIVE' || status === 'SCANNING') {
+        card.classList.add('active');
+        statusEl.classList.add('active');
+      } else if (status === 'PROCESSING') {
+        card.classList.add('processing');
+        statusEl.classList.add('processing');
+      }
+    }
+
+    function updateAgentMetrics() {
+      document.getElementById('metrics-monitor').textContent =
+        `Checks: ${agentMetrics.monitor.checks} | Anomalies: ${agentMetrics.monitor.anomalies}`;
+
+      document.getElementById('metrics-analyzer').textContent =
+        `Patterns: ${agentMetrics.analyzer.patterns}`;
+
+      document.getElementById('metrics-alert').textContent =
+        `Active Alerts: ${agentMetrics.alert.active}`;
+
+      document.getElementById('metrics-predictor').textContent =
+        `Predictions: ${agentMetrics.predictor.predictions}`;
+
+      document.getElementById('metrics-coordinator').textContent =
+        `Coordinations: ${agentMetrics.coordinator.coordinations}`;
+    }
+
+    // ========================================
+    // USER ACTIONS
+    // ========================================
+
+    async function refreshPatients() {
+      try {
+        const res = await fetch('/api/patient-states');
+        patientStates = await res.json();
+        renderPatients();
+        showToast('Patients refreshed', 'success');
+      } catch (e) {
+        console.error('Failed to refresh:', e);
+        showToast('Refresh failed', 'error');
+      }
+    }
+
+    function requestAnalysis() {
+      const firstDevice = Object.keys(patientStates)[0];
+      if (firstDevice) {
+        requestAnalysisFor(firstDevice);
+      } else {
+        alert('No patients to analyze');
+      }
+    }
+
+    async function requestAnalysisFor(deviceId) {
+      setAgentActive('coordinator', 'PROCESSING');
+
+      try {
+        // Get current patient state for context
+        const currentState = patientStates[deviceId];
+
+        const res = await fetch(`/api/force-analysis/${deviceId}`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+
+        // Pass current state to display function
+        displayAnalysis(data, deviceId, currentState);
+
+        setAgentActive('coordinator', 'IDLE');
+        showToast('Analysis complete', 'success');
+      } catch (e) {
+        console.error('Analysis failed:', e);
+        setAgentActive('coordinator', 'IDLE');
+        showToast('Analysis failed', 'error');
+      }
+    }
+
+    function playAlertSound() {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    }
+
+    // ========================================
+    // EXPANDABLE ACTIVITY TIMELINE
+    // ========================================
+
+    function updateActivityTimeline(activity) {
+      const timeline = document.getElementById('activity-timeline');
+
+      // Clear placeholder
+      if (timeline.innerHTML.includes('Waiting for agent activity')) {
+        timeline.innerHTML = '';
+      }
+
+      // Create activity item
+      const item = document.createElement('div');
+      item.className = 'workflow-step';
+
+      if (activity.status === 'success') item.classList.add('completed');
+      if (activity.status === 'running') item.classList.add('active');
+
+      const time = new Date(activity.timestamp).toLocaleTimeString();
+      const statusEmoji = activity.status === 'success' ? '✅' : activity.status === 'warning' ? '⚠️' : activity.status === 'error' ? '❌' : '🔄';
+
+      const hasDetails = activity.detailed_data && Object.keys(activity.detailed_data).length > 0;
+      const expandButton = hasDetails ? `
+        <button class="activity-expand-btn" onclick="toggleActivityDetail('${activity.id}')" style="margin-top: 8px;">
+          <span id="expand-icon-${activity.id}">▼</span> Show Details
+        </button>
+      ` : '';
+
+      item.innerHTML = `
+        <div class="workflow-title">${statusEmoji} ${activity.agent}</div>
+        <div class="workflow-desc">${activity.action}${activity.details ? ': ' + activity.details : ''}</div>
+        <div class="workflow-time">${time}${activity.device_id ? ' | Device: ' + activity.device_id : ''}</div>
+        ${expandButton}
+        <div id="detail-${activity.id}" class="activity-detail-panel" style="display:none; margin-top:10px; padding:10px; background:rgba(0,0,0,0.4); border-radius:6px; border:1px solid var(--glass-border);"></div>
+      `;
+
+      // Add to top of timeline
+      timeline.insertBefore(item, timeline.firstChild);
+
+      // Keep only last 20 activities
+      while (timeline.children.length > 20) {
+        timeline.removeChild(timeline.lastChild);
+      }
+    }
+
+    async function toggleActivityDetail(activityId) {
+      const panel = document.getElementById(`detail-${activityId}`);
+      const icon = document.getElementById(`expand-icon-${activityId}`);
+
+      if (panel.style.display === 'none') {
+        // Load detailed data
+        try {
+          const res = await fetch(`/api/agent-activity-detail/${activityId}`);
+          const data = await res.json();
+
+          if (data.detailed_data) {
+            panel.innerHTML = `
+              <div style="font-size:10px; color:var(--primary); margin-bottom:8px; font-weight:700;">DETAILED DATA:</div>
+              <pre style="font-size:9px; color:var(--text-muted); line-height:1.4; overflow-x:auto;">${JSON.stringify(data.detailed_data, null, 2)}</pre>
+            `;
+          } else {
+            panel.innerHTML = '<div style="font-size:10px; color:var(--text-muted);">No detailed data available</div>';
+          }
+
+          panel.style.display = 'block';
+          icon.textContent = '▲';
+        } catch (err) {
+          panel.innerHTML = '<div style="font-size:10px; color:var(--danger);">Failed to load details</div>';
+          panel.style.display = 'block';
+        }
+      } else {
+        panel.style.display = 'none';
+        icon.textContent = '▼';
+      }
+    }
+
+    // ========================================
+    // DOWNLOAD REPORT FUNCTIONALITY
+    // ========================================
+
+    window.downloadReport = async function (deviceId, hours, format) {
+      try {
+        // Show toast notification
+        showToast(`Generating ${format.toUpperCase()} report for ${hours}h period...`, 'info');
+
+        // Create download URL
+        const url = `/api/generate-report/${deviceId}?hours=${hours}&format=${format}`;
+
+        // Fetch the report
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        // Get the blob
+        const blob = await response.blob();
+
+        // Create download link
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+
+        // Set filename based on format
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `health_report_${deviceId}_${timestamp}.${format === 'html' ? 'html' : 'json'}`;
+        a.download = filename;
+
+        // Trigger download
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        // Clean up
+        window.URL.revokeObjectURL(downloadUrl);
+
+        showToast(`Report downloaded: ${filename}`, 'success');
+      } catch (error) {
+        console.error('Download failed:', error);
+        showToast(`Download failed: ${error.message}`, 'error');
+      }
+    };
+
+    window.showReportDownloadModal = function (deviceId) {
+      // Create modal dynamically
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay visible';
+      modal.id = 'report-modal';
+      modal.style.zIndex = '2000';
+
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width:500px;">
+          <div class="modal-header">
+            <div class="modal-title">📥 Download Health Report</div>
+            <button class="modal-close" onclick="closeReportModal()">✕ Close</button>
+          </div>
+          
+          <div style="padding:20px 0;">
+            <div style="margin-bottom:20px;">
+              <div style="color:var(--text-muted); font-size:12px; margin-bottom:8px;">Device ID:</div>
+              <div style="color:var(--primary); font-family:var(--font-code); font-size:16px; font-weight:700;">${deviceId}</div>
+            </div>
+            
+            <div style="margin-bottom:20px;">
+              <label style="display:block; color:var(--text-muted); font-size:12px; margin-bottom:8px;">Time Range:</label>
+              <select id="time-range-select" style="width:100%; padding:10px; background:rgba(0,0,0,0.4); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:14px;">
+                <option value="1">Last 1 Hour</option>
+                <option value="6">Last 6 Hours</option>
+                <option value="24" selected>Last 24 Hours</option>
+                <option value="48">Last 48 Hours</option>
+                <option value="72">Last 72 Hours</option>
+                <option value="168">Last Week</option>
+              </select>
+            </div>
+            
+            <div style="margin-bottom:20px;">
+              <label style="display:block; color:var(--text-muted); font-size:12px; margin-bottom:8px;">Format:</label>
+              <select id="format-select" style="width:100%; padding:10px; background:rgba(0,0,0,0.4); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:14px;">
+                <option value="html" selected>HTML (Printable)</option>
+                <option value="json">JSON (Data)</option>
+              </select>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:30px;">
+              <button onclick="closeReportModal()" style="padding:12px; background:rgba(255,255,255,0.1); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; cursor:pointer; font-size:14px; transition:all 0.2s;">
+                Cancel
+              </button>
+              <button onclick="confirmDownloadReport('${deviceId}')" style="padding:12px; background:linear-gradient(135deg, var(--primary), var(--secondary)); border:none; color:white; border-radius:8px; cursor:pointer; font-size:14px; font-weight:700; transition:all 0.2s;">
+                📥 Download
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      // Close on overlay click
+      modal.addEventListener('click', (e) => {
+        if (e.target.id === 'report-modal') {
+          closeReportModal();
+        }
+      });
+    };
+
+    window.closeReportModal = function () {
+      const modal = document.getElementById('report-modal');
+      if (modal) {
+        modal.remove();
+      }
+    };
+
+    window.confirmDownloadReport = function (deviceId) {
+      const hours = document.getElementById('time-range-select').value;
+      const format = document.getElementById('format-select').value;
+
+      downloadReport(deviceId, hours, format);
+      closeReportModal();
+    };
+
+    // ========================================
+    // TOAST NOTIFICATION SYSTEM
+    // ========================================
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        background: ${type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--success)' : type === 'info' ? 'var(--primary)' : 'var(--warning)'};
+        color: white;
+        padding: 15px 25px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        z-index: 10000;
+        font-size: 14px;
+        font-weight: 600;
+        animation: slideIn 0.3s ease-out;
+      `;
+      toast.textContent = message;
+
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Add animation styles
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      @keyframes slideOut {
+        from {
+          transform: translateX(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+      }
+      .activity-expand-btn {
+        background: transparent;
+        border: 1px solid var(--glass-border);
+        color: var(--primary);
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 10px;
+        cursor: pointer;
+        width: 100%;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+      .activity-expand-btn:hover {
+        background: rgba(0, 242, 255, 0.1);
+        border-color: var(--primary);
+      }
+    `;
+    document.head.appendChild(style);
+
+    // ========================================
+    // AUTO-REFRESH & INITIALIZATION
+    // ========================================
+
+    setInterval(() => {
+      refreshPatients();
+    }, 15000); // Refresh every 15 seconds
+
+    // Initial load
+    refreshPatients();
+
+    // Close modal on escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closePatientModal();
+      }
+    });
+
+    // Close modal on overlay click
+    document.getElementById('patient-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'patient-modal') {
+        closePatientModal();
+      }
+    });
+  </script>
+
+  <!-- Enhanced Features Script -->
+  <script src="/static/enhanced-features.js"></script>
+
+  <!-- Initialize Default Models Display -->
+  <script>
+    // ⚡ REVOLUTIONARY MODEL: lfm2.5-thinking:1.2b
+    // 100% fall detection | 90% accuracy | 7x smaller | 1.5x faster!
+    document.addEventListener('DOMContentLoaded', function () {
+      const defaultModel = 'ollama:lfm2.5-thinking:1.2b';
+      const agents = ['monitor', 'analyzer', 'alert', 'predictor', 'coordinator'];
+
+      agents.forEach(agent => {
+        const label = document.getElementById(`current-model-${agent}`);
+        if (label) {
+          label.innerHTML = `🔹 Model: <strong>${defaultModel}</strong>`;
+        }
+      });
+
+      console.log('⚡ Revolutionary model initialized: lfm2.5-thinking:1.2b');
+      console.log('✅ 100% fall detection | 90% accuracy | Ultra-fast!');
+    });
+  </script>
+
+</body>
+
+</html>
