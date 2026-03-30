@@ -13,10 +13,11 @@
 
 ---
 
-## What is UTLMediCore?
-**UTLMediCore Agentic AI** is an intelligent health monitoring and reporting system powered by advanced Artificial Intelligence. The system is designed to correlate real-time sensor data (such as Heart Rate, SpO2, and Posture) with manual patient context (such as meal logs, sleep duration, and daily activities) to synthesise highly precise and comprehensive clinical reports.
-
-Rather than passively recording data, the application utilizes a **Knowledge Graph (Neo4j)** and a **Multi-Agent Architecture (CrewAI / Lite Agent)** to analyze patterns, detect health anomalies, and provide automated medical insights and recommendations.
+## About
+**UTLMediCore Agentic AI** is a comprehensive health platform built around three core pillars:
+1. **Intelligent Health Monitoring**: Continuous, real-time physiological tracking (Heart Rate, SpO2, Posture) paired with autonomous AI anomaly detection.
+2. **Interactive Graph Memory Chat**: A responsive conversational interface powered by a **Neo4j Knowledge Graph**, allowing the AI to recall long-term patient histories, correlate complex health data, and provide deeply contextual medical insights.
+3. **Manual Context Input**: Integrated logging forms that allow patients to capture precise daily events (meals, exercise, and sleep states) directly into the Neo4j graph, giving the AI a holistic understanding of the patient's lifestyle.
 
 ---
 
