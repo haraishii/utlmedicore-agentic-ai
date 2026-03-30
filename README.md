@@ -13,132 +13,135 @@
 
 ---
 
-## Apa itu UTLMediCore?
-**UTLMediCore Agentic AI** adalah sebuah sistem pemantauan kesehatan cerdas dan penghasil laporan medis berbasis kecerdasan buatan (AI). Sistem ini dirancang untuk menghubungkan data sensor waktu-nyata (seperti Detak Jantung, SpO2, dan Postur) dengan konteks manual dari pasien (seperti jadwal makan, durasi tidur, dan aktivitas harian) menjadi laporan klinis terpadu yang sangat presisi.
+## What is UTLMediCore?
+**UTLMediCore Agentic AI** is an intelligent health monitoring and reporting system powered by advanced Artificial Intelligence. The system is designed to correlate real-time sensor data (such as Heart Rate, SpO2, and Posture) with manual patient context (such as meal logs, sleep duration, and daily activities) to synthesise highly precise and comprehensive clinical reports.
 
-Aplikasi ini tidak hanya merekam data secara pasif, melainkan menggunakan mesin **Knowledge Graph (Neo4j)** dan pendekatan **Multi-Agent (CrewAI / Lite Agent)** untuk mensintesis pola dan memberikan wawasan/rekomendasi medis secara otomatis.
-
----
-
-## Fitur Utama
-1. **Agentic Insight Generator**: Menggunakan Multi-Phase Cognitive Reasoning untuk membuat laporan medis harian atau kustom (1 jam - 168 jam).
-   - Phase 1 (Analyst): Mencari korelasi antara aktivitas/makan dengan fluktuasi tanda-tanda vital.
-   - Phase 2 (Clinical Writer): Menyusun wawasan tersebut menggunakan bahasa medis profesional bebas-emoticon.
-2. **Hybrid Graph-Memory Engine**: Menyimpan struktur data interaktif dengan Neo4j + Graphiti AI.
-   - Direct Database Write untuk penyimpanan sensor mentah super cepat (< 1 detik).
-   - Entity Extraction LLM untuk membaca konteks log manual dan mengubahnya menjadi relasi logis di dalam graf.
-3. **Cloud & Local LLM Ready**: Integrasi mulus menggunakan Ollama antara pemrosesan LLM lokal (llama3.1:8b) bebas biaya, atau pengalihan ke Cloud API (mistral-large-3:675b / kimi-k2-thinking) untuk penalaran (reasoning) yang berat.
-4. **Manual Context Entry**: Antarmuka responsif bagi pengguna untuk mencatat rekaman makanan, aktivitas, dan riwayat kesehatan. Semua catatan dikalibrasi secara ketat ke zona waktu referensi lokal (UTC+8).
-5. **Bento Dashboard UI**: Antarmuka modern untuk memantau status sistem, koneksi database MongoDB/Neo4j, dan mengunduh laporan berformat HTML.
+Rather than passively recording data, the application utilizes a **Knowledge Graph (Neo4j)** and a **Multi-Agent Architecture (CrewAI / Lite Agent)** to analyze patterns, detect health anomalies, and provide automated medical insights and recommendations.
 
 ---
 
-## Arsitektur Sistem & Cara Kerjanya
+## Key Features
+1. **Agentic Insight Generator**: Employs Multi-Phase Cognitive Reasoning to generate daily or custom-period (1-168 hours) medical reports.
+   - Phase 1 (Analyst): Discovers correlations between activities/meals and vital sign fluctuations.
+   - Phase 2 (Clinical Writer): Structures the insights using professional clinical terminology.
+2. **Hybrid Graph-Memory Engine**: Maintains an interactive data structure via Neo4j and Graphiti AI.
+   - Direct Database Write for ultra-low latency (< 1 second) storage of raw sensor metrics.
+   - Entity Extraction System (LLM-driven) to comprehend manual log contexts and convert them into logical graph relationships.
+3. **Cloud & Local LLM Ready**: Seamless integration via Ollama to toggle between cost-free local LLM processing (e.g., llama3.1:8b) and Cloud APIs (e.g., mistral-large-3:675b / kimi-k2-thinking) for intensive cognitive reasoning tasks.
+4. **Manual Context Entry**: A responsive interface enabling users to log meals, activities, and medical history. All entries are rigorously calibrated to the local reference timezone (UTC+8).
+5. **Bento Dashboard UI**: A modern interface for monitoring system diagnostics, checking MongoDB/Neo4j database connections, and downloading AI-generated HTML reports.
+
+---
+
+## System Architecture
 
 1. **Frontend (Bento Dashboard)**
-   Berbasis HTML/CSS/JS (Flask Templates). Menyajikan formulir untuk menambahkan Manual Context (Makanan/Peristiwa), serta tombol pemicu yang mengaktifkan pembuatan laporan AI.
+   Built with HTML/CSS/JS via Flask Templates. It features forms for manual context entry and interactive report generation triggers.
 2. **Backend (Python / Flask)**
-   agentic_medicore_enhanced.py bertindak sebagai router utama yang mengatur jalurnya data antara Frontend, sistem memori (Neo4j), dan sistem Agen (CrewAI).
+   The `agentic_medicore_enhanced.py` acts as the primary router, orchestrating data traffic between the frontend, the Neo4j memory system, and the CrewAI agentic layer.
 3. **Database Layer**
-   - MongoDB: Untuk menyimpan raw log data/tangkapan log IoT.
-   - Neo4j: Database graf (Knowledge Graph) yang bertugas menghubungkan entitas. Contohnya: (Pasien)-[:HAD_READING]->(Detak Jantung) disilangkan dengan (Pasien)-[:CONSUMED]->(Makanan Pedas).
+   - MongoDB: Functions as the data lake for storing raw IoT appliance logs.
+   - Neo4j: The core Knowledge Graph engine responsible for linking entities. For instance, `(Patient)-[:HAD_READING]->(HeartRate)` is cross-referenced with `(Patient)-[:CONSUMED]->(Spicy Meal)`.
 4. **Agent Layer (CrewAI / Lite Agent)**
-   Saat user meminta laporan, Agent akan menarik seluruh memory/graph dari Neo4j. AI mengevaluasi data, mendeteksi anomali, dan menulis laporan medis.
+   When a report generation request is triggered, the Agent retrieves the entire memory graph from Neo4j. The LLM systematically evaluates the data, detects physiological anomalies, and drafts the clinical report.
 
 ---
 
-## Struktur Direktori Utama
+## Core Directory Structure
 
 ```text
 utlmedicore-agentic-ai/
-├── agentic_medicore_enhanced.py  # MAIN APP (Flask Backend Router)
-├── Dockerfile                    # Konfigurasi container untuk isolasi
-├── docker-compose.yml            # Konfigurasi layanan multi-container (DB & App)
-├── .env                          # Konfigurasi kredensial sistem (API Key, DB passwords)
+├── agentic_medicore_enhanced.py  # Main Entry Point (Flask Backend Router)
+├── Dockerfile                    # Containerization instructions
+├── docker-compose.yml            # Multi-container service definitions
+├── .env                          # System credentials and variables
 ├── memory /                      # Core Knowledge Graph Engine
-│   ├── direct_neo4j_writer.py    # Algoritma penyimpanan sensor tanpa batas (layer 1)
-│   ├── patient_memory.py         # Modul utama manajemen Graphiti dan struktur Neo4j
-│   └── graphiti_client.py        # Ekstraksi LLM ke Cloud (Ollama Cloud API)
-├── insights /                    # Logika Multi-Agent & Report
-│   └── lite_report_agent.py      # Skrip instruksi untuk CrewAI (Analyst + Writer)
-├── templates /                   # UI Frontend HTML
-│   └── agentic_interface_enhanced.html # Bento Dashboard utama
-├── reports /                     # Direktori laporan otomatis (Daily / Custom)
-└── utils /                       # Modul general (tz_utils.py untuk sinkronisasi waktu)
+│   ├── direct_neo4j_writer.py    # High-speed sensor storage algorithm (Layer 1)
+│   ├── patient_memory.py         # Graphiti management and Neo4j structure module
+│   └── graphiti_client.py        # Cloud LLM extraction logic (Ollama Cloud API)
+├── insights /                    # Multi-Agent Reporting Logic
+│   └── lite_report_agent.py      # CrewAI instructions (Analyst & Writer profiles)
+├── templates /                   # Frontend UI Templates
+│   └── agentic_interface_enhanced.html # Main Bento UI Dashboard
+├── reports /                     # Output directory for AI-generated HTML reports
+└── utils /                       # General utilities (e.g., tz_utils.py for timezone sync)
 ```
 
 ---
 
-## Instalasi & Persiapan Menjalankan Sistem
+## Installation & Deployment Guide
 
-Sistem ini bisa dijalankan langsung di local environment (Conda) atau menggunakan Docker.
+The system can be executed locally via a Conda environment or isolated within Docker containers.
 
-### A. Syarat Sistem Utama (Prerequisites)
-1. Python 3.10+ (atau Anaconda/Miniconda)
-2. Instance Neo4j dan MongoDB yang sedang berjalan (di lokal maupun di cloud terpisah).
-3. Ollama diinstal lokal jika Anda merencanakan pemrosesan LLM di mesin lokal.
+### A. Prerequisites
+1. Python 3.10+ (Anaconda or Miniconda recommended)
+2. Active instances of Neo4j and MongoDB (Local or Cloud)
+3. Ollama installed locally (Required if operating localized LLM processing)
 
-### B. Opsi 1: Menjalankan Menggunakan Conda (Rekomendasi Developer)
+### B. Option 1: Conda Environment (Developer Recommendation)
 
-**1. Clone Repositori**
+**1. Clone the Repository**
 ```bash
 git clone https://github.com/haraishii/utlmedicore-agentic-ai.git
 cd utlmedicore-agentic-ai
 ```
 
-**2. Atur Conda Environment**
+**2. Setup the Environment**
 ```bash
 conda create -n aisuite-agent python=3.10
 conda activate aisuite-agent
 pip install -r requirements.txt
 ```
 
-**3. Konfigurasi Lingkungan (.env)**
-Buat atau pastikan keberadaan file .env di root dan sesuaikan dengan contoh environment ini:
+**3. Configure Environment Variables (.env)**
+Ensure an `.env` file is present in the root directory. Use the following template:
 ```env
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=password_anda
+NEO4J_PASSWORD=your_password
 
 MONGO_URI=mongodb://localhost:27017/
 
-# Mode Penggunaan AI
+# AI Configuration Mode
 GRAPHITI_USE_CLOUD=false
 GRAPHITI_LLM_MODEL=llama3.1:8b
-# OLLAMA_CLOUD_API_KEY=xxx-xxxxx-xxxx (Jika menggunakan Mistral Cloud)
+# OLLAMA_CLOUD_API_KEY=xxx-xxxxx-xxxx (Required if using Mistral Cloud)
 ```
 
-**4. Jalankan Aplikasi Utama**
+**4. Start the Primary Application**
 ```bash
 python agentic_medicore_enhanced.py
 ```
-Aplikasi akan aktif di http://127.0.0.1:5000 atau http://localhost:5000.
+The application will bind to `http://127.0.0.1:5000` or `http://localhost:5000`.
 
 ---
 
-### C. Opsi 2: Menjalankan Menggunakan Docker (Deployment/Server)
+### C. Option 2: Docker Deployment (Preferred for Server Environments)
 
-Cara ini sangat direkomendasikan jika Anda ingin agar infrastruktur benar-benar seragam dan bersih di laptop/server tanpa benturan versi package.
+This method ensures a completely uniform and clean infrastructure, mitigating package conflicts.
 
 ```bash
-# Pastikan Docker Desktop / Daemon Anda berjalan
+# Ensure the Docker daemon is active
 docker-compose up -d --build
 ```
-Log sistem bisa Anda amati dengan menjalankan perintah:
+To monitor the active system logs:
 ```bash
 docker-compose logs -f app
 ```
 
 ---
 
-## Panduan Penggunaan Singkat
+## Quick Usage Guide
 
-1. **Dashboard**
-   Buka http://localhost:5000. Di bagian atas, antarmuka akan menampilkan "System Diagnostics" yang mengecek kesiapan Memori Neo4j, MongoDB, dan LLM Routing.
-2. **Log Pasien (Manual Context)**
-   Buka salah satu profil pasien. Di boks "Manual Data Entry", coba catat aktivitas simulasi seperti:
-   - Pilih kategori: Meal
-   - Ketik: "Makan nasi goreng"
-   - Atur Jam: Sesuai keperluan.
-3. **Generate Report**
-   Pilih "Generate Report" di menu periode (Harian, Mingguan, atau Kustom jam tertentu). Sistem akan berpikir selama 30 - 90 detik. Tunggu terminal memproses fasa (Phase 1 & Phase 2). Jika laporan selesai, ia dapat segera diunduh dalam bentuk ekstensi HTML.
+1. **Dashboard Initialization**
+   Navigate to `http://localhost:5000`. The upper UI segment displays a "System Diagnostics" panel verifying Neo4j memory stability, MongoDB connections, and LLM node readiness.
+2. **Patient Logging (Manual Context)**
+   Open a specific patient profile. In the "Manual Data Entry" box, log a simulated event such as:
+   - Select Category: Meal
+   - Description: "Consumed chicken fried rice"
+   - Timestamp: Adjust precisely as needed.
+3. **Report Generation**
+   Trigger "Generate Report" from the timeline menu (Daily, Weekly, or specific Custom hours). The system processing generally takes between 30 to 90 seconds. Monitor the console terminal for Phase 1 and Phase 2 progression. Upon completion, the clinical report is immediately available for download in HTML format.
+
+---
+**Maintained by:** UTLMediCore Architecture Team | Agentic AI Integration
